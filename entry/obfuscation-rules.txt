@@ -1,0 +1,1 @@
+# Keep release obfuscation disabled until public APIs and routing are stable.

@@ -1,0 +1,140 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#F5F7F8"
+    },
+    {
+      "name": "page_background",
+      "value": "#F5F7F8"
+    },
+    {
+      "name": "login_canvas",
+      "value": "#F1F2F4"
+    },
+    {
+      "name": "brand_red",
+      "value": "#E93345"
+    },
+    {
+      "name": "brand_red_material",
+      "value": "#D9E93345"
+    },
+    {
+      "name": "brand_red_soft",
+      "value": "#1FE93345"
+    },
+    {
+      "name": "brand_on_red",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "login_material_tint",
+      "value": "#A8FFFFFF"
+    },
+    {
+      "name": "login_disabled_fill",
+      "value": "#1F182024"
+    },
+    {
+      "name": "login_disabled_text",
+      "value": "#73182024"
+    },
+    {
+      "name": "focus_outline",
+      "value": "#FFE93345"
+    },
+    {
+      "name": "surface",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "navigation_background",
+      "value": "#F2FFFFFF"
+    },
+    {
+      "name": "text_primary",
+      "value": "#182024"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#667177"
+    },
+    {
+      "name": "accent",
+      "value": "#E93345"
+    },
+    {
+      "name": "button_text",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "chip_selected",
+      "value": "#1FE93345"
+    },
+    {
+      "name": "chip_selected_text",
+      "value": "#C51F31"
+    },
+    {
+      "name": "chip_selected_material",
+      "value": "#E6FFFFFF"
+    },
+    {
+      "name": "chip_idle",
+      "value": "#E8ECEE"
+    },
+    {
+      "name": "surface_secondary",
+      "value": "#EDF1F2"
+    },
+    {
+      "name": "surface_elevated",
+      "value": "#FAFFFFFF"
+    },
+    {
+      "name": "divider",
+      "value": "#1A182024"
+    },
+    {
+      "name": "outline",
+      "value": "#335E696E"
+    },
+    {
+      "name": "accent_soft",
+      "value": "#33E93345"
+    },
+    {
+      "name": "accent_contrast",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "danger",
+      "value": "#B3261E"
+    },
+    {
+      "name": "danger_soft",
+      "value": "#F9DEDC"
+    },
+    {
+      "name": "scrim",
+      "value": "#66000000"
+    },
+    {
+      "name": "player_material",
+      "value": "#F2FFFFFF"
+    },
+    {
+      "name": "artwork_placeholder",
+      "value": "#D6DFE1"
+    },
+    {
+      "name": "success",
+      "value": "#24725E"
+    },
+    {
+      "name": "transparent",
+      "value": "#00000000"
+    }
+  ]
+}

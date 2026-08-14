@@ -1,0 +1,56 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "飞牛音乐主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "飞牛音乐入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "飞牛音乐"
+    },
+    {
+      "name": "home_title",
+      "value": "飞牛音乐"
+    },
+    {
+      "name": "home_subtitle",
+      "value": "你的私人音乐库"
+    },
+    {
+      "name": "search_hint",
+      "value": "搜索歌曲、专辑或歌手"
+    },
+    {
+      "name": "connect_server",
+      "value": "连接飞牛服务器"
+    },
+    {
+      "name": "nav_home",
+      "value": "首页"
+    },
+    {
+      "name": "nav_profile",
+      "value": "我的"
+    },
+    {
+      "name": "development_message",
+      "value": "功能开发中"
+    },
+    {
+      "name": "retry",
+      "value": "重试"
+    },
+    {
+      "name": "empty_library",
+      "value": "连接服务器后，这里会显示你的音乐"
+    },
+    {
+      "name": "permission_background_audio_reason",
+      "value": "用于在后台持续播放音乐并响应系统媒体控制"
+    }
+  ]
+}

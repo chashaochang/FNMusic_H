@@ -1,0 +1,36 @@
+/node_modules
+/oh_modules
+/.hvigor
+/.idea
+/build
+/**/build
+/local.properties
+
+# Local verification and generated test output
+/.tmp
+/diagnosis
+/entry/.test
+*.log
+*.hap
+*.app
+
+# Local coding-agent configuration
+/.claude
+/.cursor
+/.deveco-flow
+/.windsurfrules
+/opencode.json
+
+# Local credentials and signing material
+.env
+.env.*
+*.cer
+*.p7b
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+
+# OS metadata
+.DS_Store
