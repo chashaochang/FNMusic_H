@@ -301,6 +301,14 @@
       "value": "#EDF1F2"
     },
     {
+      "name": "player_format_background",
+      "value": "#1AFFFFFF"
+    },
+    {
+      "name": "player_hit_target",
+      "value": "#01000000"
+    },
+    {
       "name": "surface_elevated",
       "value": "#FAFFFFFF"
     },

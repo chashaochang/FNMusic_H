@@ -29,12 +29,20 @@ import {
 import { MusicPlaybackController } from '../playback/MusicPlaybackController';
 import { PlayerPresentationState, connectPlayerPresentationState } from '../playback/PlayerPresentationStore';
 import {
+  FLOATING_PLAYER_TRANSITION_ID,
+  HOME_PLAYER_TRANSITION_ID,
   MiniPlayerBar,
   MusicPlayerScreen,
   PlaybackQueueSheet,
   PlayerHostPlacement
 } from '../playback/PlayerComponents';
-import { ezCustomTransition } from '@hmanimations/ezcustomtransition';
+import {
+  ezCustomTransition,
+  LongTakeSession,
+  LongTakeTransitionDelegate,
+  LongTakeTransitionParam,
+  LongTakeTransitionType
+} from '@hmanimations/ezcustomtransition';
 import {
   DividerMode,
   HdsNavDestination,
@@ -70,9 +78,89 @@ enum RootTab {
   PROFILE = 'profile'
 }
 
-const PLAYER_TRANSITION_DURATION: number = 320;
-
 class PlayerRouteParams {
+  longTakeTransitionParam?: LongTakeTransitionParam = undefined;
+}
+
+@Component
+struct PlayerNavDestination {
+  pathStack: NavPathStack = new NavPathStack();
+  safeTop: number = 0;
+  safeBottom: number = 0;
+  albums: MusicAlbum[] = [];
+  artists: MusicArtist[] = [];
+  playlists: MusicPlaylist[] = [];
+  onBack: () => void = (): void => {};
+  onFavorite: (track: MusicTrack, favorite: boolean) => void =
+    (_: MusicTrack, __: boolean): void => {};
+  onOpenAlbum: (track: MusicTrack) => void = (_: MusicTrack): void => {};
+  onOpenArtist: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist) => void =
+    (_: MusicTrack, __: MusicPlaylist): void => {};
+  onHidden: () => void = (): void => {};
+  onBackPressed: () => boolean = (): boolean => false;
+  onTransitionUnavailable: () => void = (): void => {};
+  @State private longTakeSession: LongTakeSession = new LongTakeSession();
+  @State private longTakeParam: LongTakeTransitionParam | undefined = undefined;
+
+  @Builder
+  private playerContent() {
+    MusicPlayerScreen({
+      safeTop: this.safeTop,
+      safeBottom: this.safeBottom,
+      albums: this.albums,
+      artists: this.artists,
+      playlists: this.playlists,
+      onBack: (): void => this.onBack(),
+      onFavorite: (track: MusicTrack, favorite: boolean): void => this.onFavorite(track, favorite),
+      onOpenAlbum: (track: MusicTrack): void => this.onOpenAlbum(track),
+      onOpenArtist: (artist: MusicArtist): void => this.onOpenArtist(artist),
+      onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist): void => this.onAddPlaylist(track, playlist)
+    })
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.page_background'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+  }
+
+  build() {
+    HdsNavDestination() {
+      if (this.longTakeParam !== undefined) {
+        LongTakeTransitionDelegate({
+          longTakeSession: this.longTakeSession,
+          contentBuilder: (): void => {
+            this.playerContent()
+          }
+        })
+      } else {
+        this.playerContent()
+      }
+    }
+    .backgroundColor(this.longTakeParam !== undefined ?
+      this.longTakeSession.navDestinationBgColor : Color.Transparent)
+    .titleMode(HdsNavDestinationTitleMode.MINI)
+    .hideTitleBar(true)
+    .hideToolBar(true)
+    .onSizeChange((_: SizeOptions, size: SizeOptions): void => {
+      this.longTakeSession.setNewSize(size);
+    })
+    .onReady((context: NavDestinationContext): void => {
+      const params = context.pathInfo?.param as PlayerRouteParams;
+      this.longTakeParam = params?.longTakeTransitionParam;
+      if (this.longTakeParam === undefined) {
+        this.onTransitionUnavailable();
+        return;
+      }
+      this.longTakeSession.init(context, this.longTakeParam, {
+        pop: (): void => {
+          this.pathStack.pop();
+        },
+        contentSizeUsePercent: true
+      });
+    })
+    .onHidden((): void => this.onHidden())
+    .onBackPressed((): boolean => this.onBackPressed())
+  }
 }
 
 @ComponentV2
@@ -210,6 +298,7 @@ struct HomeBottomChrome {
       MiniPlayerBar({
         state: this.playerState,
         placement: PlayerHostPlacement.COMPACT_HOME,
+        transitionId: HOME_PLAYER_TRANSITION_ID,
         onExpand: (): void => this.onExpand(),
         onToggle: (): void => {
           this.playback.toggle().catch((): void => {});
@@ -304,6 +393,7 @@ export struct AppShell {
   private homeScroller: Scroller = new Scroller();
   private pathStack: NavPathStack = new NavPathStack();
   private playerTransitionInProgress: boolean = false;
+  private pendingPlayerMinimizeAction?: () => void = undefined;
 
   @Monitor('rootTab')
   onRootTabChanged(): void {
@@ -481,7 +571,7 @@ export struct AppShell {
         selectedTab: this.rootTab,
         progress: this.rootTab === RootTab.HOME ? this.homeChromeProgress : 0,
         safeBottom: this.safeBottom,
-        showPlayer: this.page !== AppShellPage.PLAYER && this.rootTab === RootTab.HOME,
+        showPlayer: this.rootTab === RootTab.HOME,
         onSelectTab: (tab: RootTab): void => {
           this.rootTab = tab;
         },
@@ -626,40 +716,54 @@ export struct AppShell {
     if (this.playerTransitionInProgress || !this.hasPlayer()) {
       return;
     }
+    const routeParams = new PlayerRouteParams();
+    routeParams.longTakeTransitionParam = ezCustomTransition.generateLongTakeParam(
+      this.getUIContext(), this.playerTransitionSourceId(), this.playerTransitionRadius(), {
+        type: LongTakeTransitionType.CardLongTake,
+        useSpringCurve: false,
+        isGestureEnabled: false,
+        onEnterTransitionEnd: (): void => {
+          this.playerTransitionInProgress = false;
+          this.navigationEnabled = true;
+          if (showQueueAfterTransition && this.page === AppShellPage.PLAYER) {
+            this.playback.showQueue();
+          }
+        },
+        onBackTransitionEnd: (): void => this.finishPlayerMinimize()
+      });
     this.playerTransitionInProgress = true;
     this.playerReturnPage = this.page;
     this.playback.hideQueue();
-    this.getUIContext().animateTo({
-      duration: PLAYER_TRANSITION_DURATION,
-      curve: Curve.FastOutSlowIn,
-      onFinish: (): void => {
-        this.playerTransitionInProgress = false;
-        if (showQueueAfterTransition && this.page === AppShellPage.PLAYER) {
-          this.playback.showQueue();
-        }
-      }
-    }, (): void => {
-      this.page = AppShellPage.PLAYER;
-      this.pathStack.pushPathByName(AppShellPage.PLAYER, new PlayerRouteParams(), false);
-    });
+    this.page = AppShellPage.PLAYER;
+    this.pathStack.pushPath({ name: AppShellPage.PLAYER, param: routeParams });
   }
 
-  private minimizePlayer(): void {
+  private minimizePlayer(after?: () => void): void {
     if (this.playerTransitionInProgress) {
       return;
     }
     this.playerTransitionInProgress = true;
+    this.pendingPlayerMinimizeAction = after;
     this.playback.hideQueue();
-    this.getUIContext().animateTo({
-      duration: PLAYER_TRANSITION_DURATION,
-      curve: Curve.FastOutSlowIn,
-      onFinish: (): void => {
-        this.playerTransitionInProgress = false;
-      }
-    }, (): void => {
-      this.pathStack.pop(false);
-      this.syncPageFromPathStack();
-    });
+    this.pathStack.pop();
+  }
+
+  private playerTransitionSourceId(): string {
+    return this.page === AppShellPage.ROOT && this.rootTab === RootTab.HOME ?
+      HOME_PLAYER_TRANSITION_ID : FLOATING_PLAYER_TRANSITION_ID;
+  }
+
+  private playerTransitionRadius(): number {
+    return this.page === AppShellPage.ROOT && this.rootTab === RootTab.HOME ?
+      FnMusicUI.miniPlayerHeight / 2 : FnMusicUI.floatingPlayerHeight / 2;
+  }
+
+  private finishPlayerMinimize(): void {
+    this.playerTransitionInProgress = false;
+    this.navigationEnabled = true;
+    const action = this.pendingPlayerMinimizeAction;
+    this.pendingPlayerMinimizeAction = undefined;
+    action?.();
   }
 
   private goBack(): void {
@@ -866,6 +970,10 @@ export struct AppShell {
     };
     this.activeTracks = update(this.activeTracks);
     this.searchTracks = update(this.searchTracks);
+    this.playerState.queue = update(this.playerState.queue);
+    if (this.runtime !== undefined) {
+      this.runtime.tracks = update(this.runtime.tracks);
+    }
   }
 
   private async savePlaylist(name: string): Promise<void> {
@@ -999,10 +1107,73 @@ export struct AppShell {
 
   @Builder
   private appDestination(name: string, _: Object) {
-    HdsNavDestination() {
-      if (name === AppShellPage.PLAYER) {
-        this.playerDestinationContent()
-      } else if (name === AppShellPage.SEARCH) {
+    if (name === AppShellPage.PLAYER) {
+      PlayerNavDestination({
+        pathStack: this.pathStack,
+        safeTop: this.safeTop,
+        safeBottom: this.safeBottom,
+        albums: this.albums(),
+        artists: this.artists(),
+        playlists: this.playlists(),
+        onBack: (): void => this.goBack(),
+        onFavorite: (track: MusicTrack, favorite: boolean): void => {
+          if (this.runtime === undefined) {
+            this.syncFavoriteState(track.guid, favorite);
+            FnToast.show(favorite ? '已收藏' : '已取消收藏');
+            return;
+          }
+          AppRuntime.setFavorite(track, favorite).then((): void => {
+            this.syncFavoriteState(track.guid, favorite);
+            FnToast.show(favorite ? '已收藏' : '已取消收藏');
+          }).catch((error: Error): void => {
+            FnToast.show(error.message || '收藏操作失败');
+          });
+        },
+        onOpenAlbum: (track: MusicTrack): void => {
+          const album = this.albums().find((item: MusicAlbum): boolean =>
+            item.guid === track.albumGuid || item.name === track.albumName);
+          if (album === undefined) {
+            FnToast.show('未找到这首歌曲的专辑');
+            return;
+          }
+          this.minimizePlayer((): void => this.openAlbum(album));
+        },
+        onOpenArtist: (artist: MusicArtist): void => {
+          this.minimizePlayer((): void => this.openArtist(artist));
+        },
+        onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist): void => {
+          if (this.runtime === undefined) {
+            playlist.trackCount += 1;
+            FnToast.show(`已加入「${playlist.name}」`);
+            return;
+          }
+          AppRuntime.addTrackToPlaylist(playlist.guid, track.guid).then((): void => {
+            playlist.trackCount += 1;
+            this.runtime!.playlists = this.runtime!.playlists.slice();
+            FnToast.show(`已加入「${playlist.name}」`);
+          }).catch((error: Error): void => {
+            FnToast.show(error.message || '加入歌单失败');
+          });
+        },
+        onHidden: (): void => {
+          this.syncPageFromPathStack();
+          this.finishPlayerMinimize();
+        },
+        onBackPressed: (): boolean => {
+          if (this.playback.dismissOverlay()) {
+            return true;
+          }
+          this.minimizePlayer();
+          return true;
+        },
+        onTransitionUnavailable: (): void => {
+          this.playerTransitionInProgress = false;
+          this.navigationEnabled = true;
+        }
+      })
+    } else {
+      HdsNavDestination() {
+        if (name === AppShellPage.SEARCH) {
         SearchScreen({
           tracks: this.runtime === undefined ? this.tracks() : this.searchTracks,
           albums: this.runtime === undefined ? this.albums() : this.searchAlbums,
@@ -1068,38 +1239,16 @@ export struct AppShell {
             }
           }
         })
-      }
-    }
-    .backgroundColor(Color.Transparent)
-    .titleMode(HdsNavDestinationTitleMode.MINI)
-    .hideTitleBar(true)
-    .hideToolBar(true)
-    .onHidden((): void => {
-      this.syncPageFromPathStack();
-    })
-    .onBackPressed((): boolean => {
-      if (name === AppShellPage.PLAYER) {
-        if (this.playback.dismissOverlay()) {
-          return true;
         }
-        this.minimizePlayer();
-        return true;
       }
-      return false;
-    })
-  }
-
-  @Builder
-  private playerDestinationContent() {
-    MusicPlayerScreen({
-      safeTop: this.safeTop,
-      safeBottom: this.safeBottom,
-      onBack: (): void => this.goBack()
-    })
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.page_background'))
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      .backgroundColor(Color.Transparent)
+      .titleMode(HdsNavDestinationTitleMode.MINI)
+      .hideTitleBar(true)
+      .hideToolBar(true)
+      .onHidden((): void => {
+        this.syncPageFromPathStack();
+      })
+    }
   }
 
   build() {
@@ -1164,9 +1313,6 @@ export struct AppShell {
     .enabled(this.navigationEnabled)
     .customNavContentTransition((from: NavContentInfo, to: NavContentInfo,
       operation: NavigationOperation): NavigationAnimatedTransition | undefined => {
-      if (from.name === AppShellPage.PLAYER || to.name === AppShellPage.PLAYER) {
-        return undefined;
-      }
       return ezCustomTransition.customNavContentTransition(from, to, operation, {
         onTransitionStart: (): void => {
           this.navigationEnabled = false;
@@ -1179,11 +1325,12 @@ export struct AppShell {
     .width('100%')
     .height('100%')
 
-      if (this.hasPlayer() && this.page !== AppShellPage.PLAYER && !this.sheetVisible() &&
+      if (this.hasPlayer() && !this.sheetVisible() &&
         (this.page !== AppShellPage.ROOT || this.rootTab !== RootTab.HOME)) {
         MiniPlayerBar({
           state: this.playerState,
           placement: this.miniPlayerPlacement(),
+          transitionId: FLOATING_PLAYER_TRANSITION_ID,
           onExpand: (): void => this.openPlayer(),
           onToggle: (): void => {
             this.playback.toggle().catch((): void => {});
@@ -1200,7 +1347,7 @@ export struct AppShell {
           bottom: this.miniPlayerBottom()
         })
         .alignSelf(ItemAlign.Center)
-        .zIndex(100)
+        .zIndex(this.page === AppShellPage.PLAYER ? -1 : 100)
       }
 
       if (this.playerState.queueVisible && this.page !== AppShellPage.PLAYER) {

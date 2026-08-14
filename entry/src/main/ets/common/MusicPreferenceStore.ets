@@ -6,12 +6,14 @@ const STORE_NAME: string = 'feiniu_music_preferences';
 const MOTION_KEY: string = 'motion_enabled';
 const AUTO_CONTINUE_KEY: string = 'auto_continue_enabled';
 const LYRICS_KEY: string = 'lyrics_enabled';
+const DESKTOP_LYRICS_KEY: string = 'desktop_lyrics_enabled';
 
 @ObservedV2
 export class MusicPreferenceState {
   @Trace motionEnabled: boolean = true;
   @Trace autoContinueEnabled: boolean = true;
   @Trace lyricsEnabled: boolean = true;
+  @Trace desktopLyricsEnabled: boolean = false;
 }
 
 export function connectMusicPreferenceState(): MusicPreferenceState {
@@ -50,6 +52,11 @@ export class MusicPreferenceStore {
     MusicPreferenceStore.persist(LYRICS_KEY, enabled);
   }
 
+  static setDesktopLyricsEnabled(enabled: boolean): void {
+    MusicPreferenceStore.sharedState.desktopLyricsEnabled = enabled;
+    MusicPreferenceStore.persist(DESKTOP_LYRICS_KEY, enabled);
+  }
+
   private static restore(): void {
     const store = MusicPreferenceStore.store;
     if (store === undefined) {
@@ -58,6 +65,7 @@ export class MusicPreferenceStore {
     MusicPreferenceStore.sharedState.motionEnabled = store.getSync(MOTION_KEY, true) as boolean;
     MusicPreferenceStore.sharedState.autoContinueEnabled = store.getSync(AUTO_CONTINUE_KEY, true) as boolean;
     MusicPreferenceStore.sharedState.lyricsEnabled = store.getSync(LYRICS_KEY, true) as boolean;
+    MusicPreferenceStore.sharedState.desktopLyricsEnabled = store.getSync(DESKTOP_LYRICS_KEY, false) as boolean;
   }
 
   private static persist(key: string, value: boolean): void {

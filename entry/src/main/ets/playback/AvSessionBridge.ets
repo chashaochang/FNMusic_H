@@ -122,6 +122,34 @@ export class AvSessionBridge {
     this.active = false;
   }
 
+  async showCastPicker(): Promise<void> {
+    if (this.context === undefined) {
+      throw new Error('播放器尚未初始化');
+    }
+    const picker = new avSession.AVCastPickerHelper(this.context);
+    await picker.select({ sessionType: 'audio' });
+  }
+
+  async desktopLyricSupported(): Promise<boolean> {
+    return await avSession.isDesktopLyricSupported();
+  }
+
+  async setDesktopLyricEnabled(enabled: boolean): Promise<void> {
+    await this.initialize();
+    const session = this.session;
+    if (session === undefined) {
+      throw new Error('播放器会话尚未初始化');
+    }
+    const supported = await avSession.isDesktopLyricSupported();
+    if (!supported) {
+      throw new Error('当前设备不支持系统歌词');
+    }
+    await session.enableDesktopLyric(enabled);
+    if (enabled) {
+      await session.setDesktopLyricVisible(true);
+    }
+  }
+
   async destroy(): Promise<void> {
     if (this.initializing !== undefined) {
       try {

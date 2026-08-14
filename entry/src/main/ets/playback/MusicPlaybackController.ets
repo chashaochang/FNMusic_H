@@ -61,7 +61,14 @@ export class MusicPlaybackController {
     });
     this.initialized = true;
     this.session.initialize()
-      .then((): void => this.syncSession())
+      .then((): void => {
+        this.syncSession();
+        if (MusicPreferenceStore.state().desktopLyricsEnabled) {
+          this.session.setDesktopLyricEnabled(true).catch((): void => {
+            MusicPreferenceStore.setDesktopLyricsEnabled(false);
+          });
+        }
+      })
       .catch((): void => {});
   }
 
@@ -76,6 +83,18 @@ export class MusicPlaybackController {
 
   refreshSystemSession(): void {
     this.syncSession();
+  }
+
+  async showCastPicker(): Promise<void> {
+    await this.session.showCastPicker();
+  }
+
+  async desktopLyricSupported(): Promise<boolean> {
+    return await this.session.desktopLyricSupported();
+  }
+
+  async setDesktopLyricEnabled(enabled: boolean): Promise<void> {
+    await this.session.setDesktopLyricEnabled(enabled);
   }
 
   release(): void {
