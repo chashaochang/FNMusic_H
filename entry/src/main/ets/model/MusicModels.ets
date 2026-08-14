@@ -414,6 +414,62 @@ export function musicTrackFromWire(data: MusicTrackWire): MusicTrack {
   return value;
 }
 
+export function musicTrackToWire(value: MusicTrack): MusicTrackWire {
+  const artists: MusicArtistWire[] = value.artists.length > 0 ?
+    value.artists.map((artist: MusicArtist): MusicArtistWire => ({
+      guid: artist.guid,
+      name: artist.name,
+      coverId: artist.coverId,
+      trackCount: artist.trackCount,
+      albumCount: artist.albumCount
+    })) : (value.artistName.length > 0 ? [{ guid: value.artistGuid, name: value.artistName }] : []);
+  return {
+    guid: value.guid,
+    title: value.title,
+    coverId: value.coverId,
+    year: value.year,
+    discNo: value.discNo,
+    trackNo: value.trackNo,
+    duration: value.durationMs,
+    isCue: value.isCue,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+    album: {
+      guid: value.album.guid.length > 0 ? value.album.guid : value.albumGuid,
+      name: value.album.name.length > 0 ? value.album.name : value.albumName,
+      coverId: value.album.coverId,
+      releaseDate: value.album.year,
+      trackCount: value.album.trackCount,
+      createdAt: value.album.createdAt
+    },
+    artists: artists,
+    isFavorite: value.isFavorite,
+    hasLyric: value.hasLyric,
+    audioSpec: {
+      bitDepth: value.audioSpec.bitDepth,
+      sampleRate: value.audioSpec.sampleRate,
+      channel: value.audioSpec.channel,
+      bitrate: value.audioSpec.bitrate,
+      codec: value.audioSpec.codec,
+      format: value.audioSpec.format,
+      duration: value.audioSpec.durationMs,
+      size: value.audioSpec.size,
+      path: value.audioSpec.path
+    },
+    isrc: value.isrc,
+    genres: value.genres.map((genre: MusicGenre): MusicGenreWire => ({
+      guid: genre.guid,
+      name: genre.name,
+      coverId: genre.coverId,
+      trackCount: genre.trackCount,
+      createdAt: genre.createdAt,
+      updatedAt: genre.updatedAt
+    })),
+    isAudioFileDeleted: value.isAudioFileDeleted,
+    score: value.score
+  };
+}
+
 export function musicPlaylistFromWire(data: MusicPlaylistWire): MusicPlaylist {
   const value = new MusicPlaylist(data.guid ?? '', data.name ?? '未知歌单', wireNumber(data.trackCount));
   value.coverId = data.coverId ?? '';

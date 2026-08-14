@@ -345,6 +345,12 @@ export struct SearchScreen {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [$r('app.color.page_catalog_background_start'), 0],
+        [$r('app.color.page_catalog_background_end'), 1]
+      ]
+    })
   }
 }

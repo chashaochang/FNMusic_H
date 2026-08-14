@@ -5,7 +5,17 @@ import { EmptyMusicState, MusicArtwork, PlaylistRow, SectionHeader, SettingsRow 
 @ComponentV2
 struct ProfileIdentityCard {
   @Param user: MusicUser = new MusicUser();
-  @Param connectionLabel: string = '';
+
+  private roleLabel(): string {
+    const role = this.user.role.toLowerCase();
+    if (role === 'admin' || role === 'administrator') {
+      return '管理员';
+    }
+    if (role === 'user') {
+      return '普通用户';
+    }
+    return this.user.role.length > 0 ? this.user.role : '普通用户';
+  }
 
   build() {
     Row({ space: 12 }) {
@@ -16,18 +26,13 @@ struct ProfileIdentityCard {
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.text_primary'))
           .maxLines(1)
-        Row({ space: 8 }) {
-          Text(this.user.role.length > 0 ? this.user.role : 'user')
+        Row() {
+          Text(this.roleLabel())
             .fontSize(12)
             .fontColor($r('app.color.chip_selected_text'))
             .padding({ left: 6, right: 6, top: 2, bottom: 2 })
             .borderRadius(4)
             .backgroundColor($r('app.color.surface_secondary'))
-          Text(this.connectionLabel)
-            .fontSize(FnMusicUI.supportingSize)
-            .fontColor($r('app.color.text_secondary'))
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
       }
       .layoutWeight(1)
@@ -41,7 +46,6 @@ struct ProfileIdentityCard {
 @ComponentV2
 export struct ProfileScreen {
   @Param user: MusicUser = new MusicUser();
-  @Param connectionLabel: string = '';
   @Param playlists: MusicPlaylist[] = [];
   @Param bottomInset: number = 0;
   @Event onOpenPlaylist: (playlist: MusicPlaylist) => void = (_: MusicPlaylist): void => {};
@@ -68,7 +72,7 @@ export struct ProfileScreen {
   build() {
     Scroll() {
       Column({ space: FnMusicUI.sectionGap }) {
-        ProfileIdentityCard({ user: this.user, connectionLabel: this.connectionLabel })
+        ProfileIdentityCard({ user: this.user })
 
         Column({ space: 6 }) {
           SectionHeader({
@@ -149,6 +153,12 @@ export struct ProfileScreen {
     .height('100%')
     .scrollBar(BarState.Off)
     .edgeEffect(EdgeEffect.Spring)
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [$r('app.color.page_profile_background_start'), 0],
+        [$r('app.color.page_profile_background_end'), 1]
+      ]
+    })
   }
 }

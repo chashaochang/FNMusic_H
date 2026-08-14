@@ -122,21 +122,32 @@ export struct MiniPlayerBar {
         .accessibilityText('下一首')
         .onClick((): void => this.onNext())
 
-      Button({ type: ButtonType.Circle, stateEffect: true }) {
-        SymbolGlyph($r('sys.symbol.music_note_list'))
-          .fontSize(20)
-          .fontColor([$r('app.color.text_primary')])
+      Button({ type: ButtonType.Circle, stateEffect: !this.state.roamMode }) {
+        if (this.state.roamMode) {
+          Image($r('app.media.mini_player_roam'))
+            .width(21)
+            .height(21)
+            .objectFit(ImageFit.Contain)
+        } else {
+          SymbolGlyph($r('sys.symbol.music_note_list'))
+            .fontSize(20)
+            .fontColor([$r('app.color.text_primary')])
+        }
       }
       .width(32)
       .height(32)
       .buttonStyle(ButtonStyleMode.TEXTUAL)
       .backgroundColor(Color.Transparent)
-      .accessibilityText('播放队列')
-      .onClick((): void => this.onQueue())
+      .accessibilityText(this.state.roamMode ? '漫游模式' : '播放队列')
+      .onClick((): void => {
+        if (!this.state.roamMode) {
+          this.onQueue();
+        }
+      })
     }
     .width('100%')
     .height(this.playerHeight())
-    .padding({ left: 8, right: 6 })
+    .padding({ left: 8, right: this.state.roamMode ? 10 : 6 })
     .alignItems(VerticalAlign.Center)
     .borderRadius(this.playerHeight() / 2)
     .clip(true)
@@ -148,6 +159,7 @@ export struct MiniPlayerBar {
 @ComponentV2
 struct QueuePanel {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
+  @Param safeBottom: number = 0;
   @Event onSelect: (index: number) => void = (_: number): void => {};
   @Event onClear: () => void = (): void => {};
 
@@ -223,9 +235,36 @@ struct QueuePanel {
       .cachedCount(2)
     }
     .width('100%')
-    .padding({ left: 10, right: 10, top: 14, bottom: 24 })
+    .padding({ left: 10, right: 10, top: 14, bottom: Math.max(24, this.safeBottom + 16) })
     .borderRadius({ topLeft: FnMusicUI.cardRadius, topRight: FnMusicUI.cardRadius })
     .backgroundColor($r('app.color.surface_elevated'))
+  }
+}
+
+@ComponentV2
+export struct PlaybackQueueSheet {
+  @Param state: PlayerPresentationState = new PlayerPresentationState();
+  @Param safeBottom: number = 0;
+  @Event onClose: () => void = (): void => {};
+  @Event onSelect: (index: number) => void = (_: number): void => {};
+  @Event onClear: () => void = (): void => {};
+
+  build() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor($r('app.color.scrim'))
+        .onClick((): void => this.onClose())
+      QueuePanel({
+        state: this.state,
+        safeBottom: this.safeBottom,
+        onSelect: (index: number): void => this.onSelect(index),
+        onClear: (): void => this.onClear()
+      })
+    }
+    .width('100%')
+    .height('100%')
   }
 }
 
@@ -669,23 +708,22 @@ struct ExpandedPlayer {
         top: Math.max(20, this.safeTop + 8),
         bottom: Math.max(24, this.safeBottom + 16)
       })
-      .backgroundColor($r('app.color.page_background'))
+      .linearGradient({
+        angle: 180,
+        colors: [
+          [$r('app.color.page_player_background_start'), 0],
+          [$r('app.color.page_player_background_end'), 1]
+        ]
+      })
 
       if (this.panel === ExpandedPanel.QUEUE) {
-        Stack({ alignContent: Alignment.Bottom }) {
-          Column()
-            .width('100%')
-            .height('100%')
-            .backgroundColor($r('app.color.scrim'))
-            .onClick((): void => this.onPanel(ExpandedPanel.PLAYER))
-          QueuePanel({
-            state: this.state,
-            onSelect: (index: number): void => this.onQueueSelect(index),
-            onClear: (): void => this.onClearQueue()
-          })
-        }
-        .width('100%')
-        .height('100%')
+        PlaybackQueueSheet({
+          state: this.state,
+          safeBottom: this.safeBottom,
+          onClose: (): void => this.onPanel(ExpandedPanel.PLAYER),
+          onSelect: (index: number): void => this.onQueueSelect(index),
+          onClear: (): void => this.onClearQueue()
+        })
       }
     }
     .width('100%')

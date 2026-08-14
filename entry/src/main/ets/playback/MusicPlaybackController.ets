@@ -9,6 +9,7 @@ import { FeiniuMusicApi } from '../network/FeiniuMusicApi';
 import { AvSessionBridge } from './AvSessionBridge';
 import { LyricsController } from './LyricsController';
 import { PlaybackQueue } from './PlaybackQueue';
+import { PlaybackSessionStore, RestoredPlaybackSession } from './PlaybackSessionStore';
 import {
   LyricLoadStatus,
   PlaybackRepeatMode,
@@ -34,6 +35,8 @@ export class MusicPlaybackController {
   private initialized: boolean = false;
   private queueExtension?: QueueExtension;
   private queueExtensionInFlight?: Promise<MusicTrack[]>;
+  private roamTrackSource?: QueueExtension;
+  private lastPersistedPositionMs: number = -1;
 
   static instance(): MusicPlaybackController {
     return MusicPlaybackController.shared;
@@ -45,6 +48,8 @@ export class MusicPlaybackController {
 
   initialize(context: common.UIAbilityContext): void {
     this.context = context;
+    PlaybackSessionStore.initialize(context);
+    this.restorePlaybackSession();
     this.session.configure(context, {
       onPlay: (): void => { this.resume().catch((): void => {}); },
       onPause: (): void => { this.pause().catch((): void => {}); },
@@ -55,12 +60,18 @@ export class MusicPlaybackController {
       onQueueItem: (index: number): void => { this.playAt(index).catch((): void => {}); }
     });
     this.initialized = true;
-    this.session.initialize().catch((): void => {});
+    this.session.initialize()
+      .then((): void => this.syncSession())
+      .catch((): void => {});
   }
 
   configureApi(api?: FeiniuMusicApi, auth?: AuthStore): void {
     this.api = api;
     this.auth = auth;
+  }
+
+  configureRoamTrackSource(source: QueueExtension): void {
+    this.roamTrackSource = source;
   }
 
   refreshSystemSession(): void {
@@ -75,6 +86,7 @@ export class MusicPlaybackController {
     if (player !== undefined) {
       this.releasePlayer(player).catch((): void => {});
     }
+    PlaybackSessionStore.clear();
     this.playbackState.reset();
     this.clearQueueExtension();
     this.session.destroy().catch((): void => {});
@@ -86,13 +98,27 @@ export class MusicPlaybackController {
     if (index < 0) {
       return;
     }
+    this.playbackState.roamMode = false;
+    this.playbackState.queueVisible = false;
     this.queueExtension = extension;
     this.queueExtensionInFlight = undefined;
     this.playbackState.queue = values;
     await this.playAt(index);
   }
 
-  async playAt(index: number): Promise<void> {
+  async playRoam(tracks: MusicTrack[], startIndex: number = 0): Promise<void> {
+    const index: number = PlaybackQueue.normalizedIndex(tracks, startIndex);
+    if (index < 0) {
+      return;
+    }
+    this.clearQueueExtension();
+    this.playbackState.roamMode = true;
+    this.playbackState.queueVisible = false;
+    this.playbackState.queue = [tracks[index]];
+    await this.playAt(0);
+  }
+
+  async playAt(index: number, initialPositionMs: number = 0): Promise<void> {
     if (index < 0 || index >= this.playbackState.queue.length) {
       return;
     }
@@ -104,8 +130,9 @@ export class MusicPlaybackController {
       return;
     }
     this.playbackState.currentIndex = index;
-    this.playbackState.positionMs = 0;
     this.playbackState.durationMs = Math.max(0, track.durationMs);
+    this.playbackState.positionMs = this.playbackState.durationMs > 0 ?
+      Math.min(Math.max(0, initialPositionMs), this.playbackState.durationMs) : Math.max(0, initialPositionMs);
     this.playbackState.bufferedMs = 0;
     this.playbackState.status = PlaybackStatus.PREPARING;
     this.playbackState.errorMessage = '';
@@ -129,6 +156,7 @@ export class MusicPlaybackController {
       await this.playQueue([track], 0);
       return;
     }
+    this.playbackState.roamMode = false;
     const currentGuid: string = this.playbackState.currentTrack()?.guid ?? '';
     const values: MusicTrack[] = PlaybackQueue.insertNext(
       this.playbackState.queue,
@@ -146,6 +174,7 @@ export class MusicPlaybackController {
       await this.playQueue([track], 0);
       return;
     }
+    this.playbackState.roamMode = false;
     this.playbackState.queue = PlaybackQueue.append(this.playbackState.queue, track);
     this.syncSession();
   }
@@ -175,6 +204,10 @@ export class MusicPlaybackController {
   }
 
   async next(): Promise<void> {
+    if (this.playbackState.roamMode) {
+      await this.advanceRoam();
+      return;
+    }
     if (this.shouldExtendQueueAtEnd() && await this.extendQueueAtEnd()) {
       await this.playAt(this.playbackState.currentIndex + 1);
       return;
@@ -233,6 +266,7 @@ export class MusicPlaybackController {
     this.generation += 1;
     this.stopDemoTimer();
     await this.replacePlayer(undefined);
+    PlaybackSessionStore.clear();
     this.playbackState.reset();
     this.clearQueueExtension();
     await this.session.deactivate().catch((): void => {});
@@ -254,7 +288,7 @@ export class MusicPlaybackController {
   }
 
   showQueue(): void {
-    if (this.playbackState.currentTrack() !== undefined) {
+    if (!this.playbackState.roamMode && this.playbackState.currentTrack() !== undefined) {
       this.playbackState.queueVisible = true;
     }
   }
@@ -294,6 +328,10 @@ export class MusicPlaybackController {
       return;
     }
     const player: media.AVPlayer | undefined = this.player;
+    if (player === undefined) {
+      await this.playAt(this.playbackState.currentIndex, this.playbackState.positionMs);
+      return;
+    }
     if (player !== undefined && this.canPlay(player.state)) {
       await player.play();
     }
@@ -350,6 +388,9 @@ export class MusicPlaybackController {
       if (state === 'prepared') {
         this.playbackState.durationMs = Math.max(this.playbackState.durationMs, player.duration);
         this.playbackState.status = PlaybackStatus.PAUSED;
+        if (this.playbackState.positionMs > 0) {
+          player.seek(this.clampPosition(this.playbackState.positionMs));
+        }
         player.play().catch((error: BusinessError): void => this.failCurrent(player, generation, error.message));
       } else if (state === 'initialized') {
         player.prepare().catch((error: BusinessError): void => this.failCurrent(player, generation, error.message));
@@ -378,6 +419,7 @@ export class MusicPlaybackController {
       }
       this.playbackState.positionMs = this.clampPosition(positionMs);
       this.updateActiveLyric();
+      this.persistPositionIfNeeded();
     });
     player.on('durationUpdate', (durationMs: number): void => {
       if (this.isCurrent(player, generation)) {
@@ -431,6 +473,7 @@ export class MusicPlaybackController {
       this.playbackState.positionMs = Math.min(durationMs, this.playbackState.positionMs + 250);
       this.playbackState.bufferedMs = durationMs;
       this.updateActiveLyric();
+      this.persistPositionIfNeeded();
       if (this.playbackState.positionMs >= durationMs) {
         this.stopDemoTimer();
         this.playbackState.status = PlaybackStatus.COMPLETED;
@@ -485,6 +528,10 @@ export class MusicPlaybackController {
 
   private async handleCompleted(generation: number): Promise<void> {
     if (generation !== this.generation) {
+      return;
+    }
+    if (this.playbackState.roamMode) {
+      await this.advanceRoam();
       return;
     }
     if (!MusicPreferenceStore.state().autoContinueEnabled &&
@@ -548,6 +595,25 @@ export class MusicPlaybackController {
     this.queueExtensionInFlight = undefined;
   }
 
+  private async advanceRoam(): Promise<void> {
+    if (!this.playbackState.roamMode || this.roamTrackSource === undefined) {
+      this.syncSession();
+      return;
+    }
+    const currentGuid: string = this.playbackState.currentTrack()?.guid ?? '';
+    const tracks: MusicTrack[] = await this.roamTrackSource();
+    const next: MusicTrack | undefined = tracks.find((track: MusicTrack): boolean =>
+      track.guid.length > 0 && track.guid !== currentGuid) ??
+      tracks.find((track: MusicTrack): boolean => track.guid.length > 0);
+    if (next === undefined) {
+      this.syncSession();
+      return;
+    }
+    this.playbackState.queue = [next];
+    this.playbackState.currentIndex = 0;
+    await this.playAt(0);
+  }
+
   private async replacePlayer(next?: media.AVPlayer): Promise<void> {
     const previous: media.AVPlayer | undefined = this.player;
     this.player = next;
@@ -577,6 +643,7 @@ export class MusicPlaybackController {
   }
 
   private syncSession(): void {
+    this.saveSession();
     if (!this.initialized) {
       return;
     }
@@ -585,6 +652,41 @@ export class MusicPlaybackController {
       this.api.coverUrl(track.coverId, 512, track.updatedAt) : '';
     this.sessionChain = this.sessionChain.then((): Promise<void> =>
       this.session.sync(this.playbackState, coverUrl)).catch((): void => {});
+  }
+
+  saveSession(): void {
+    PlaybackSessionStore.save(this.playbackState);
+    this.lastPersistedPositionMs = this.playbackState.positionMs;
+  }
+
+  private persistPositionIfNeeded(): void {
+    if (this.lastPersistedPositionMs < 0 ||
+      Math.abs(this.playbackState.positionMs - this.lastPersistedPositionMs) >= 5000) {
+      this.saveSession();
+    }
+  }
+
+  private restorePlaybackSession(): void {
+    const restored: RestoredPlaybackSession | undefined = PlaybackSessionStore.restore();
+    if (restored === undefined) {
+      return;
+    }
+    this.playbackState.queue = restored.queue;
+    this.playbackState.currentIndex = restored.currentIndex;
+    this.playbackState.status = restored.status;
+    this.playbackState.positionMs = restored.positionMs;
+    this.playbackState.durationMs = restored.durationMs;
+    this.playbackState.bufferedMs = 0;
+    this.playbackState.repeatMode = restored.repeatMode;
+    this.playbackState.lyricLines = [];
+    this.playbackState.activeLyricIndex = -1;
+    this.playbackState.lyricStatus = LyricLoadStatus.IDLE;
+    this.playbackState.lyricErrorMessage = '';
+    this.playbackState.errorMessage = '';
+    this.playbackState.queueVisible = false;
+    this.playbackState.demoMode = false;
+    this.playbackState.roamMode = restored.roamMode;
+    this.lastPersistedPositionMs = restored.positionMs;
   }
 
   private reportPlay(): void {

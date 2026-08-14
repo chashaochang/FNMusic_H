@@ -85,7 +85,9 @@ export class AppRuntime {
       vault as CredentialStorage
     );
     AppRuntime.auth.addListener((snapshot: AuthSnapshot): void => AppRuntime.publishAuth(snapshot));
-    MusicPlaybackController.instance().configureApi(AppRuntime.api, AppRuntime.auth);
+    const playback = MusicPlaybackController.instance();
+    playback.configureApi(AppRuntime.api, AppRuntime.auth);
+    playback.configureRoamTrackSource((): Promise<MusicTrack[]> => AppRuntime.nextRoam());
     AppRuntime.initialized = true;
   }
 
@@ -534,6 +536,9 @@ export class AppRuntime {
     state.username = snapshot.username;
     state.role = snapshot.role;
     state.canRetry = snapshot.canRetry;
+    if (snapshot.phase === AuthPhase.AUTHENTICATED) {
+      MusicPlaybackController.instance().refreshSystemSession();
+    }
     const generation = AppRuntime.auth?.sessionGeneration() ?? -1;
     const startsAnotherSession = snapshot.phase !== AuthPhase.AUTHENTICATED &&
       AppRuntime.loadedLibrarySessionGeneration >= 0 &&

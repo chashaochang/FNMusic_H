@@ -41,6 +41,7 @@ export class PlayerPresentationState {
   @Trace errorMessage: string = '';
   @Trace queueVisible: boolean = false;
   @Trace demoMode: boolean = false;
+  @Trace roamMode: boolean = false;
 
   currentTrack(): MusicTrack | undefined {
     if (this.currentIndex < 0 || this.currentIndex >= this.queue.length) {
@@ -63,6 +64,7 @@ export class PlayerPresentationState {
     this.errorMessage = '';
     this.queueVisible = false;
     this.demoMode = false;
+    this.roamMode = false;
   }
 }
 

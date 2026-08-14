@@ -41,7 +41,7 @@ struct PreferenceToggleRow {
 @ComponentV2
 export struct SettingsSheet {
   @Local activeDetail: string = '';
-  @Param connectionLabel: string = '';
+  @Param connected: boolean = false;
   @Param preferences: MusicPreferenceState = new MusicPreferenceState();
   @Event onClose: () => void = (): void => {};
   @Event onLibraryManagement: () => void = (): void => {};
@@ -128,7 +128,7 @@ export struct SettingsSheet {
             Divider().strokeWidth(1).color($r('app.color.divider')).margin({ left: 56 })
             SettingsRow({
               title: '服务器设置',
-              subtitle: 'FN Connect、地址与重新探测',
+              subtitle: 'FN Connect、连接状态与重新探测',
               symbol: $r('sys.symbol.externaldrive'),
               onSelect: (): void => {
                 this.activeDetail = 'server';
@@ -188,10 +188,10 @@ export struct SettingsSheet {
                 onChanged: (enabled: boolean): void => this.onLyricsChanged(enabled)
               })
             } else if (this.activeDetail === 'server') {
-              SettingsRow({ title: 'FN Connect', subtitle: '使用登录页保存的设备标识', symbol: $r('sys.symbol.externaldrive'), showChevron: false })
+              SettingsRow({ title: 'FN Connect', subtitle: '设备标识已安全保存在本机', symbol: $r('sys.symbol.externaldrive'), showChevron: false })
               SettingsRow({
-                title: '当前地址',
-                subtitle: this.connectionLabel.length > 0 ? this.connectionLabel : '暂未连接',
+                title: '连接状态',
+                subtitle: this.connected ? '已连接' : '暂未连接',
                 symbol: $r('sys.symbol.checkmark_circle_fill'),
                 showChevron: false
               })

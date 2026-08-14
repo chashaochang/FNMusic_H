@@ -4,6 +4,12 @@ import { AppRuntime, AppRuntimeState } from '../../common/AppRuntime';
 import { CollectionKind, MusicTrack } from '../../model/MusicModels';
 import { EmptyMusicState, SecondaryPageHeader, TrackRow } from '../common/MusicUiComponents';
 
+enum TrackSortMode {
+  DEFAULT = 'default',
+  TITLE_ASC = 'title_asc',
+  TITLE_DESC = 'title_desc'
+}
+
 @ComponentV2
 struct TrackListHero {
   @Param title: string = '';
@@ -104,7 +110,7 @@ export struct TrackListScreen {
   @Param bottomInset: number = 0;
   @Param loading: boolean = false;
   @Param errorMessage: string = '';
-  @Local ascending: boolean = true;
+  @Local sortMode: TrackSortMode = TrackSortMode.DEFAULT;
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
   @Event onPlay: (tracks: MusicTrack[], index: number) => void = (_: MusicTrack[], __: number): void => {};
@@ -131,10 +137,82 @@ export struct TrackListScreen {
   }
 
   private sortedTracks(): MusicTrack[] {
-    return this.visibleTracks().slice().sort((left: MusicTrack, right: MusicTrack): number => {
+    const tracks = this.visibleTracks().slice();
+    if (this.sortMode === TrackSortMode.DEFAULT) {
+      return tracks;
+    }
+    return tracks.sort((left: MusicTrack, right: MusicTrack): number => {
       const compare: number = left.title.localeCompare(right.title);
-      return this.ascending ? compare : -compare;
+      return this.sortMode === TrackSortMode.TITLE_ASC ? compare : -compare;
     });
+  }
+
+  private sortLabel(): string {
+    if (this.sortMode === TrackSortMode.TITLE_ASC) {
+      return '标题升序';
+    }
+    if (this.sortMode === TrackSortMode.TITLE_DESC) {
+      return '标题降序';
+    }
+    return '默认排序';
+  }
+
+  private sortSymbol(): Resource {
+    if (this.sortMode === TrackSortMode.TITLE_ASC) {
+      return $r('sys.symbol.arrow_up');
+    }
+    if (this.sortMode === TrackSortMode.TITLE_DESC) {
+      return $r('sys.symbol.arrow_down');
+    }
+    return $r('sys.symbol.arrow_clockwise');
+  }
+
+  private cycleSortMode(): void {
+    if (this.sortMode === TrackSortMode.DEFAULT) {
+      this.sortMode = TrackSortMode.TITLE_ASC;
+    } else if (this.sortMode === TrackSortMode.TITLE_ASC) {
+      this.sortMode = TrackSortMode.TITLE_DESC;
+    } else {
+      this.sortMode = TrackSortMode.DEFAULT;
+    }
+  }
+
+  private backgroundStart(): ResourceColor {
+    if (this.collectionId === CollectionKind.FAVORITES) {
+      return $r('app.color.page_favorite_background_start');
+    }
+    if (this.collectionId === CollectionKind.HISTORY) {
+      return $r('app.color.page_history_background_start');
+    }
+    if (this.collectionId === CollectionKind.ROAM) {
+      return $r('app.color.page_roam_background_start');
+    }
+    if (this.collectionId === CollectionKind.ARTIST) {
+      return $r('app.color.page_artist_background_start');
+    }
+    if (this.collectionId === CollectionKind.GENRE) {
+      return $r('app.color.page_genre_background_start');
+    }
+    return $r('app.color.page_catalog_background_start');
+  }
+
+  private backgroundEnd(): ResourceColor {
+    if (this.collectionId === CollectionKind.FAVORITES) {
+      return $r('app.color.page_favorite_background_end');
+    }
+    if (this.collectionId === CollectionKind.HISTORY) {
+      return $r('app.color.page_history_background_end');
+    }
+    if (this.collectionId === CollectionKind.ROAM) {
+      return $r('app.color.page_roam_background_end');
+    }
+    if (this.collectionId === CollectionKind.ARTIST) {
+      return $r('app.color.page_artist_background_end');
+    }
+    if (this.collectionId === CollectionKind.GENRE) {
+      return $r('app.color.page_genre_background_end');
+    }
+    return $r('app.color.page_catalog_background_end');
   }
 
   private shuffleStartIndex(): number {
@@ -181,10 +259,10 @@ export struct TrackListScreen {
             Blank()
             Button({ type: ButtonType.Normal }) {
               Row({ space: 5 }) {
-                SymbolGlyph(this.ascending ? $r('sys.symbol.arrow_up') : $r('sys.symbol.arrow_down'))
+                SymbolGlyph(this.sortSymbol())
                   .fontSize(15)
                   .fontColor([$r('app.color.accent')])
-                Text(this.ascending ? '标题升序' : '标题降序')
+                Text(this.sortLabel())
                   .fontSize(13)
                   .fontColor($r('app.color.accent'))
               }
@@ -194,7 +272,7 @@ export struct TrackListScreen {
             .borderRadius(FnMusicUI.controlRadius)
             .backgroundColor($r('app.color.transparent'))
             .onClick((): void => {
-              this.ascending = !this.ascending;
+              this.cycleSortMode();
             })
           }
           .width('100%')
@@ -302,6 +380,12 @@ export struct TrackListScreen {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [this.backgroundStart(), 0],
+        [this.backgroundEnd(), 1]
+      ]
+    })
   }
 }

@@ -118,7 +118,13 @@ export struct AlbumCollectionScreen {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [$r('app.color.page_catalog_background_start'), 0],
+        [$r('app.color.page_catalog_background_end'), 1]
+      ]
+    })
   }
 }
 
@@ -192,7 +198,13 @@ export struct ArtistCollectionScreen {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [$r('app.color.page_artist_background_start'), 0],
+        [$r('app.color.page_artist_background_end'), 1]
+      ]
+    })
   }
 }
 
@@ -266,6 +278,12 @@ export struct GenreCollectionScreen {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.page_background'))
+    .linearGradient({
+      angle: 180,
+      colors: [
+        [$r('app.color.page_genre_background_start'), 0],
+        [$r('app.color.page_genre_background_end'), 1]
+      ]
+    })
   }
 }

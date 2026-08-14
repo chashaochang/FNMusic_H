@@ -4,6 +4,9 @@ export class FnMusicUI {
   static readonly compactGap: number = 8;
   static readonly contentGap: number = 12;
   static readonly sectionGap: number = 20;
+  static readonly homeChipToContentGap: number = 18;
+  static readonly homeRecentSectionGap: number = 36;
+  static readonly homeTrackRowGap: number = 10;
   static readonly cardRadius: number = 16;
   static readonly controlRadius: number = 8;
   static readonly chipHeight: number = 36;
@@ -12,6 +15,10 @@ export class FnMusicUI {
   static readonly actionHeight: number = 48;
   static readonly bottomBarHeight: number = 60;
   static readonly homeActionBarHeight: number = 56;
+  static readonly homeFeatureCardWidth: number = 226;
+  static readonly homeFeatureCardHeight: number = 202.4;
+  static readonly homeFeatureCardOverflowTop: number = 12;
+  static readonly homeFeatureCardRadius: number = 12;
   static readonly homeStickyRunway: number = 240;
   static readonly bottomBarSurfaceHeight: number = 56;
   static readonly bottomBarSideMargin: number = 16;

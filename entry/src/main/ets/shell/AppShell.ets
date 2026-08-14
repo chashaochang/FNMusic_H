@@ -18,6 +18,7 @@ import { TrackActionsSheet } from '../feature/library/TrackActionsSheet';
 import { TrackListScreen } from '../feature/library/TrackListScreen';
 import { PlaylistEditMode, PlaylistEditSheet } from '../feature/playlist/PlaylistEditSheet';
 import {
+  CollectionKind,
   MusicAlbum,
   MusicArtist,
   MusicGenre,
@@ -30,6 +31,7 @@ import { PlayerPresentationState, connectPlayerPresentationState } from '../play
 import {
   MiniPlayerBar,
   MusicPlayerScreen,
+  PlaybackQueueSheet,
   PlayerHostPlacement
 } from '../playback/PlayerComponents';
 import { ezCustomTransition } from '@hmanimations/ezcustomtransition';
@@ -293,6 +295,7 @@ export struct AppShell {
   @Local navigationEnabled: boolean = true;
   @Local homeChromeProgress: number = 0;
   @Local homeSectionPinned: boolean = false;
+  @Local homeSearchCollapsed: boolean = false;
   private nextLocalPlaylistId: number = 1;
   private searchSequence: number = 0;
   private tracksLoadSequence: number = 0;
@@ -321,7 +324,7 @@ export struct AppShell {
           mainTitleSize: TitleSize.TITLE_S
         },
         menu: {
-          value: this.rootTab === RootTab.HOME ? [{
+          value: this.rootTab === RootTab.HOME && this.homeSearchCollapsed ? [{
             content: {
               icon: $r('sys.symbol.magnifyingglass'),
               label: '搜索',
@@ -410,6 +413,9 @@ export struct AppShell {
           onPinnedChange: (pinned: boolean): void => {
             this.homeSectionPinned = pinned;
           },
+          onSearchCollapsedChange: (collapsed: boolean): void => {
+            this.homeSearchCollapsed = collapsed;
+          },
           onChromeProgress: (progress: number): void => {
             this.homeChromeProgress = progress;
           },
@@ -424,6 +430,9 @@ export struct AppShell {
             else if (id === 'genres') this.openPage(AppShellPage.GENRES);
           },
           onOpenAlbum: (album: MusicAlbum): void => this.openAlbum(album),
+          onPlayAlbum: (album: MusicAlbum): void => {
+            this.playAlbum(album);
+          },
           onOpenArtist: (artist: MusicArtist): void => this.openArtist(artist),
           onOpenGenre: (genre: MusicGenre): void => this.openGenre(genre),
           onPlayTracks: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
@@ -435,7 +444,7 @@ export struct AppShell {
 
       TabContent() {
         ProfileScreen({
-          user: this.currentUser(), connectionLabel: this.connectionLabel(), playlists: this.playlists(),
+          user: this.currentUser(), playlists: this.playlists(),
           bottomInset: this.bottomAvoidance(),
           onOpenPlaylist: (playlist: MusicPlaylist): void => this.openPlaylist(playlist),
           onPlaylistMore: (playlist: MusicPlaylist): void => {
@@ -472,7 +481,7 @@ export struct AppShell {
         selectedTab: this.rootTab,
         progress: this.rootTab === RootTab.HOME ? this.homeChromeProgress : 0,
         safeBottom: this.safeBottom,
-        showPlayer: this.page !== AppShellPage.PLAYER,
+        showPlayer: this.page !== AppShellPage.PLAYER && this.rootTab === RootTab.HOME,
         onSelectTab: (tab: RootTab): void => {
           this.rootTab = tab;
         },
@@ -507,7 +516,8 @@ export struct AppShell {
   }
 
   private sheetVisible(): boolean {
-    return this.showSettings || this.showTrackActions || this.showPlaylistEditor || this.showPlaylistPicker;
+    return this.playerState.queueVisible || this.showSettings || this.showTrackActions ||
+      this.showPlaylistEditor || this.showPlaylistPicker;
   }
 
   private bottomAvoidance(): number {
@@ -607,7 +617,9 @@ export struct AppShell {
   }
 
   private openPlayerQueue(): void {
-    this.openPlayerDestination(true);
+    if (!this.playerState.roamMode) {
+      this.playback.showQueue();
+    }
   }
 
   private openPlayerDestination(showQueueAfterTransition: boolean): void {
@@ -651,6 +663,9 @@ export struct AppShell {
   }
 
   private goBack(): void {
+    if (this.playback.dismissOverlay()) {
+      return;
+    }
     if (this.showSettings || this.showTrackActions || this.showPlaylistEditor || this.showPlaylistPicker) {
       this.showSettings = false;
       this.showTrackActions = false;
@@ -665,9 +680,6 @@ export struct AppShell {
       return;
     }
     if (this.page === AppShellPage.PLAYER) {
-      if (this.playback.dismissOverlay()) {
-        return;
-      }
       this.minimizePlayer();
       return;
     }
@@ -709,7 +721,7 @@ export struct AppShell {
   }
 
   private openAlbum(album: MusicAlbum): void {
-    this.activeCollectionId = '';
+    this.activeCollectionId = CollectionKind.ALBUM;
     this.activeAlbum = album;
     this.pageTitle = album.name;
     this.pageSubtitle = album.artistName;
@@ -724,7 +736,7 @@ export struct AppShell {
   }
 
   private openArtist(artist: MusicArtist): void {
-    this.activeCollectionId = '';
+    this.activeCollectionId = CollectionKind.ARTIST;
     this.activeArtist = artist;
     this.pageTitle = artist.name;
     this.pageSubtitle = '歌手热门歌曲';
@@ -739,7 +751,7 @@ export struct AppShell {
   }
 
   private openGenre(genre: MusicGenre): void {
-    this.activeCollectionId = '';
+    this.activeCollectionId = CollectionKind.GENRE;
     this.activeGenre = genre;
     this.pageTitle = genre.name;
     this.pageSubtitle = `${genre.trackCount} 首歌曲`;
@@ -753,7 +765,7 @@ export struct AppShell {
   }
 
   private openPlaylist(playlist: MusicPlaylist): void {
-    this.activeCollectionId = '';
+    this.activeCollectionId = CollectionKind.PLAYLIST;
     this.activePlaylist = playlist;
     this.pageTitle = playlist.name;
     this.pageSubtitle = playlist.description.length > 0 ? playlist.description : '自建歌单';
@@ -810,24 +822,22 @@ export struct AppShell {
       FnToast.show('当前列表没有可播放歌曲');
       return;
     }
-    this.playback.playQueue(
-      tracks,
-      index,
-      continuousRoam && this.runtime !== undefined ? (): Promise<MusicTrack[]> => this.extendRoamQueue() : undefined
-    ).catch((): void => {
+    const play = continuousRoam ? this.playback.playRoam(tracks, index) : this.playback.playQueue(tracks, index);
+    play.catch((): void => {
       FnToast.show('暂时无法播放这首歌曲');
     });
   }
 
-  private async extendRoamQueue(): Promise<MusicTrack[]> {
-    const additions = await AppRuntime.nextRoam();
-    const known: Set<string> = new Set<string>(this.activeTracks.map((track: MusicTrack): string => track.guid));
-    const unique: MusicTrack[] = additions.filter((track: MusicTrack): boolean =>
-      track.guid.length > 0 && !known.has(track.guid));
-    if (unique.length > 0 && this.activeCollectionId === 'roam') {
-      this.activeTracks = this.activeTracks.concat(unique);
+  private async playAlbum(album: MusicAlbum): Promise<void> {
+    try {
+      const tracks: MusicTrack[] = this.runtime === undefined ?
+        this.tracks().filter((track: MusicTrack): boolean =>
+          track.albumGuid === album.guid || track.albumName === album.name) :
+        await AppRuntime.albumTracks(album.guid);
+      this.playTracks(tracks, 0);
+    } catch (error) {
+      FnToast.show((error as Error).message || '专辑歌曲加载失败');
     }
-    return unique;
   }
 
   private async playCollection(id: string): Promise<void> {
@@ -971,11 +981,11 @@ export struct AppShell {
     return appSession.user;
   }
 
-  private connectionLabel(): string {
+  private isConnected(): boolean {
     if (this.runtime !== undefined) {
-      return this.runtime.baseUrl;
+      return this.runtime.baseUrl.length > 0;
     }
-    return appSession.connectionLabel;
+    return appSession.connectionLabel.length > 0;
   }
 
   public handleBack(): boolean {
@@ -1170,7 +1180,7 @@ export struct AppShell {
     .height('100%')
 
       if (this.hasPlayer() && this.page !== AppShellPage.PLAYER && !this.sheetVisible() &&
-        !(this.pathStack.getAllPathName().length === 0 && this.rootTab === RootTab.HOME)) {
+        (this.page !== AppShellPage.ROOT || this.rootTab !== RootTab.HOME)) {
         MiniPlayerBar({
           state: this.playerState,
           placement: this.miniPlayerPlacement(),
@@ -1193,9 +1203,24 @@ export struct AppShell {
         .zIndex(100)
       }
 
+      if (this.playerState.queueVisible && this.page !== AppShellPage.PLAYER) {
+        PlaybackQueueSheet({
+          state: this.playerState,
+          safeBottom: this.safeBottom,
+          onClose: (): void => this.playback.hideQueue(),
+          onSelect: (index: number): void => {
+            this.playback.playAt(index).catch((): void => {});
+          },
+          onClear: (): void => {
+            this.playback.clearQueue().catch((): void => {});
+          }
+        })
+        .zIndex(300)
+      }
+
       if (this.showSettings) {
         SettingsSheet({
-          connectionLabel: this.connectionLabel(),
+          connected: this.isConnected(),
           preferences: this.preferences,
           onClose: (): void => {
             this.showSettings = false;

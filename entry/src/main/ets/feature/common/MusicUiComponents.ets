@@ -100,6 +100,7 @@ export struct MusicArtwork {
   @Param artworkSize: number = 44;
   @Param radius: number = FnMusicUI.cardRadius;
   @Param symbol: Resource = $r('sys.symbol.music');
+  @Param placeholderMedia?: Resource = undefined;
   @Param coverId: string = '';
   @Param updatedAt: number = 0;
   @Local pixelMap?: image.PixelMap = undefined;
@@ -141,6 +142,11 @@ export struct MusicArtwork {
           .width('100%')
           .height('100%')
           .objectFit(ImageFit.Cover)
+      } else if (this.placeholderMedia !== undefined) {
+        Image(this.placeholderMedia)
+          .width(Math.max(32, Math.round(this.artworkSize * 0.34)))
+          .height(Math.max(32, Math.round(this.artworkSize * 0.34)))
+          .objectFit(ImageFit.Contain)
       } else {
         SymbolGlyph(this.symbol)
           .fontSize(Math.max(18, Math.round(this.artworkSize * 0.38)))
@@ -413,7 +419,7 @@ export struct ArtistRow {
           .fontColor($r('app.color.text_primary'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(`${this.artist.albumCount} 张专辑 · ${this.artist.trackCount} 首歌曲`)
+        Text(`${this.artist.trackCount} 首歌 · ${this.artist.albumCount} 张专辑`)
           .fontSize(FnMusicUI.supportingSize)
           .fontColor($r('app.color.text_secondary'))
           .maxLines(1)

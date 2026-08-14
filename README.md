@@ -1,54 +1,67 @@
-# FeiniuMusic
+# 飞牛音乐鸿蒙客户端
 
-An independent, unofficial HarmonyOS API 26 client for Feiniu Music.
+飞牛音乐鸿蒙客户端是一个基于 HarmonyOS API 26、使用 ArkTS 开发的非官方原生客户端，目前仅适配手机端。
 
-This project is not affiliated with or endorsed by Feiniu. It uses public
-service interfaces and public open-source references; it does not include
-reverse-engineered application packages or proprietary Feiniu assets.
+本项目与飞牛官方无隶属或合作关系。项目基于现有公开接口及公开开源项目提供的信息开发，不包含对飞牛应用安装包的逆向代码，也不提供任何服务器账号、访问凭证或私有数据。
 
-## Features
+## 已实现功能
 
-- FN ID/FN Connect and direct-domain login with HUKS-encrypted credential restore
-- Home, profile, search, albums, artists, genres and paged music library
-- Recently added albums and tracks, favorites, history and roaming playback
-- Native AVPlayer/AVSession playback, queue management and lyric display
-- Mini-player/full-player geometry transition and adaptive bottom navigation
-- HarmonyOS light/dark resources, safe-area handling and immersive materials
-- Phone-only Stage model application written in ArkTS
+- 支持 FN ID / FN Connect 登录、域名直连登录及自动重连
+- 使用 HUKS 加密保存登录凭证
+- 首页搜索、漫游、收藏、最近播放和最近添加
+- 专辑、歌手、风格及支持分页加载的音乐库
+- 最近添加专辑与歌曲展示，支持专辑一键播放
+- 原生 AVPlayer / AVSession 音乐播放、播放队列和歌词显示
+- 漫游模式随机续播，漫游状态不展示普通播放队列
+- 播放列表、当前歌曲及播放进度持久化
+- 悬浮播放条、全屏播放器及对应过渡动画
+- 底部导航随列表滚动自适应收缩与恢复
+- 深色模式、浅色模式、安全区适配及鸿蒙系统材质
+- 独立全屏搜索页和移动端二级页面导航
 
-Real library content is loaded only after a successful FN Connect or direct NAS
-login. Server availability, permissions and music-service versions can affect
-the features exposed by the client.
+实际可用功能取决于飞牛设备的系统版本、音乐服务版本、账号权限及当前网络环境。首次使用前，请确认自己的飞牛设备已启用音乐服务并可正常访问。
 
-## Build
+## 开发环境
 
-Use the API 26 toolchain bundled with DevEco Studio 3:
+- DevEco Studio 3
+- HarmonyOS API 26 SDK
+- ArkTS / ArkUI
+- Stage 模型
+
+本项目使用 DevEco Studio 3 自带的 API 26 工具链。命令行构建示例：
 
 ```bash
 env DEVECO_SDK_HOME='/Applications/DevEco-Studio 3.app/Contents/sdk' \
   '/Applications/DevEco-Studio 3.app/Contents/tools/node/bin/node' \
   '/Applications/DevEco-Studio 3.app/Contents/tools/hvigor/bin/hvigorw.js' \
-  assembleHap --mode module -p module=entry@default \
-  -p product=default -p buildMode=debug --no-daemon
+  --mode module -p product=default assembleHap \
+  --analyze=normal --parallel --incremental --daemon
 ```
 
-The repository intentionally contains no signing credentials. A command-line
-build therefore generates an unsigned HAP under:
+构建产物位于：
 
-`entry/build/default/outputs/default/`
+```text
+entry/build/default/outputs/default/
+```
 
-Configure a local debug signing profile in DevEco Studio before installing the
-HAP on an emulator or physical phone. Never commit the generated certificate,
-profile, keystore or passwords.
+## 签名与安装
 
-## Verification boundary
+仓库不包含证书、密钥库、签名口令等私密文件。首次构建前，请在 DevEco Studio 中为项目配置本机自动签名或调试签名，然后将生成的已签名 HAP 安装到 API 26 模拟器或鸿蒙手机。
 
-- Hvigor build proves API 26 ArkTS compilation and HAP packaging only.
-- Installation requires an online API 26 emulator or physical phone compatible with the local signing profile.
-- Background playback, AVSession media keys and audio format coverage require a physical device.
-- Login, FN Connect, paging, stream Range/seek, favorites and playlist writes require a real Feiniu Music server.
+请勿提交以下内容：
 
-## License
+- `.cer`、`.p7b`、`.p12`、`.pem` 等签名文件
+- 签名口令、账号密码、访问令牌
+- 真实 FN ID、服务器地址或家庭内网地址
+- 包含个人音乐库、账号信息的截图和日志
 
-Project code is distributed under `AGPL-3.0-only`. Third-party components keep
-their original licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## 验证说明
+
+- Hvigor 构建成功只能证明 ArkTS 编译及 HAP 打包通过。
+- 模拟器验证可覆盖主要界面、导航和基础交互。
+- 后台播放、系统媒体控制、音频格式兼容性需要在真机验证。
+- FN Connect、音乐库分页、流媒体拖动、收藏等功能需要连接真实飞牛设备验证。
+
+## 开源许可
+
+项目代码采用 `AGPL-3.0-only` 许可证。第三方组件仍遵循各自原始许可证，具体信息请查看 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

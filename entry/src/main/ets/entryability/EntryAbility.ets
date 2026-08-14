@@ -53,6 +53,14 @@ export default class EntryAbility extends UIAbility {
     MusicPlaybackController.instance().refreshSystemSession();
   }
 
+  onBackground(): void {
+    MusicPlaybackController.instance().saveSession();
+  }
+
+  onDestroy(): void {
+    MusicPlaybackController.instance().saveSession();
+  }
+
   private density(windowClass: window.Window): number {
     try {
       const densityInfo = windowClass.getWindowDensityInfo();

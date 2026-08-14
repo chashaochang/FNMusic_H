@@ -45,6 +45,186 @@
       "value": "#00000000"
     },
     {
+      "name": "home_page_background_start",
+      "value": "#2D293A"
+    },
+    {
+      "name": "home_page_background_end",
+      "value": "#14121B"
+    },
+    {
+      "name": "page_catalog_background_start",
+      "value": "#2D293A"
+    },
+    {
+      "name": "page_catalog_background_end",
+      "value": "#14121B"
+    },
+    {
+      "name": "page_favorite_background_start",
+      "value": "#5B181F"
+    },
+    {
+      "name": "page_favorite_background_end",
+      "value": "#171116"
+    },
+    {
+      "name": "page_history_background_start",
+      "value": "#1A432C"
+    },
+    {
+      "name": "page_history_background_end",
+      "value": "#101914"
+    },
+    {
+      "name": "page_roam_background_start",
+      "value": "#353438"
+    },
+    {
+      "name": "page_roam_background_end",
+      "value": "#151418"
+    },
+    {
+      "name": "page_artist_background_start",
+      "value": "#302B3C"
+    },
+    {
+      "name": "page_artist_background_end",
+      "value": "#14121B"
+    },
+    {
+      "name": "page_genre_background_start",
+      "value": "#4A231B"
+    },
+    {
+      "name": "page_genre_background_end",
+      "value": "#171316"
+    },
+    {
+      "name": "page_profile_background_start",
+      "value": "#24202E"
+    },
+    {
+      "name": "page_profile_background_end",
+      "value": "#111113"
+    },
+    {
+      "name": "page_player_background_start",
+      "value": "#282331"
+    },
+    {
+      "name": "page_player_background_end",
+      "value": "#111113"
+    },
+    {
+      "name": "home_card_roam_start",
+      "value": "#F7F7F5"
+    },
+    {
+      "name": "home_card_roam_middle",
+      "value": "#E1E1DF"
+    },
+    {
+      "name": "home_card_roam_end",
+      "value": "#BDBDBD"
+    },
+    {
+      "name": "home_card_disc_outer",
+      "value": "#070708"
+    },
+    {
+      "name": "home_card_disc_inner",
+      "value": "#303033"
+    },
+    {
+      "name": "home_card_album_white",
+      "value": "#F4ECE8"
+    },
+    {
+      "name": "home_card_album_orange",
+      "value": "#FF6A22"
+    },
+    {
+      "name": "home_card_album_red",
+      "value": "#FF163F"
+    },
+    {
+      "name": "home_card_album_pink",
+      "value": "#E62B91"
+    },
+    {
+      "name": "home_card_album_blue",
+      "value": "#675EEA"
+    },
+    {
+      "name": "home_card_favorite_start",
+      "value": "#FF7437"
+    },
+    {
+      "name": "home_card_favorite_middle",
+      "value": "#FF423C"
+    },
+    {
+      "name": "home_card_favorite_end",
+      "value": "#FF1644"
+    },
+    {
+      "name": "home_card_favorite_glow",
+      "value": "#FFFF9B22"
+    },
+    {
+      "name": "home_card_favorite_icon",
+      "value": "#FFD7BCA9"
+    },
+    {
+      "name": "home_card_history_start",
+      "value": "#216C45"
+    },
+    {
+      "name": "home_card_history_middle",
+      "value": "#174C2E"
+    },
+    {
+      "name": "home_card_history_end",
+      "value": "#31C974"
+    },
+    {
+      "name": "home_card_history_shadow",
+      "value": "#E6123522"
+    },
+    {
+      "name": "home_card_history_icon",
+      "value": "#A8B6D3C1"
+    },
+    {
+      "name": "home_card_recent_start",
+      "value": "#444446"
+    },
+    {
+      "name": "home_card_recent_middle",
+      "value": "#5E5E60"
+    },
+    {
+      "name": "home_card_recent_end",
+      "value": "#A8A8A9"
+    },
+    {
+      "name": "home_card_recent_shadow",
+      "value": "#CC2F2F31"
+    },
+    {
+      "name": "home_card_recent_icon",
+      "value": "#BFC0C1"
+    },
+    {
+      "name": "home_card_foreground",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "home_card_play_surface",
+      "value": "#30FFFFFF"
+    },
+    {
       "name": "brand_red",
       "value": "#FF5968"
     },
