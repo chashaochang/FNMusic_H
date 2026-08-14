@@ -6,6 +6,220 @@ import { FnMusicLoginMetrics } from '../../design/FnMusicLoginMetrics';
 import { FnMusicUI } from '../../design/FnMusicUI';
 
 @ComponentV2
+struct LoginGridOverlay {
+  private renderingSettings: RenderingContextSettings = new RenderingContextSettings(true);
+  private context: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.renderingSettings);
+
+  private draw(width: number, height: number): void {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    this.context.clearRect(0, 0, width, height);
+    this.context.beginPath();
+    this.context.strokeStyle = '#FFFFFF';
+    this.context.lineWidth = 0.5;
+    for (let x: number = 0; x <= width; x += 26) {
+      this.context.moveTo(x, 0);
+      this.context.lineTo(x, height);
+    }
+    for (let y: number = 0; y <= height; y += 26) {
+      this.context.moveTo(0, y);
+      this.context.lineTo(width, y);
+    }
+    this.context.stroke();
+  }
+
+  build() {
+    Canvas(this.context)
+      .width('100%')
+      .height('100%')
+      .opacity(0.02)
+      .hitTestBehavior(HitTestMode.None)
+      .onReady((): void => this.draw(360, 800))
+      .onAreaChange((_: Area, area: Area): void => {
+        this.draw(area.width as number, area.height as number);
+      })
+  }
+}
+
+@ComponentV2
+struct LoginAmbientBackground {
+  @Param ambientVisible: boolean = false;
+
+  build() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor($r('app.color.login_canvas'))
+
+      Stack({ alignContent: Alignment.BottomStart }) {
+        Column()
+          .width(310)
+          .height(310)
+          .radialGradient({
+            center: ['50%', '50%'],
+            radius: '50%',
+            colors: [
+              [$r('app.color.login_ambient_pink'), 0],
+              [$r('app.color.login_ambient_clear'), 1]
+            ]
+          })
+          .blur(46)
+          .translate({ x: -92, y: 108 })
+
+        Column()
+          .width(238)
+          .height(238)
+          .radialGradient({
+            center: ['50%', '50%'],
+            radius: '50%',
+            colors: [
+              [$r('app.color.login_ambient_magenta'), 0],
+              [$r('app.color.login_ambient_clear'), 1]
+            ]
+          })
+          .blur(40)
+          .translate({ x: 24, y: 68 })
+
+        Column()
+          .width(210)
+          .height(210)
+          .radialGradient({
+            center: ['50%', '50%'],
+            radius: '50%',
+            colors: [
+              [$r('app.color.login_ambient_yellow'), 0],
+              [$r('app.color.login_ambient_clear'), 1]
+            ]
+          })
+          .blur(38)
+          .translate({ x: -62, y: 132 })
+
+        Column()
+          .width(190)
+          .height(190)
+          .radialGradient({
+            center: ['50%', '50%'],
+            radius: '50%',
+            colors: [
+              [$r('app.color.login_ambient_white'), 0],
+              [$r('app.color.login_ambient_clear'), 1]
+            ]
+          })
+          .blur(42)
+          .translate({ x: 64, y: 112 })
+
+        Column()
+          .width(230)
+          .height(230)
+          .radialGradient({
+            center: ['50%', '50%'],
+            radius: '50%',
+            colors: [
+              [$r('app.color.login_ambient_orange'), 0],
+              [$r('app.color.login_ambient_clear'), 1]
+            ]
+          })
+          .blur(52)
+          .translate({ x: 134, y: 134 })
+      }
+      .width('100%')
+      .height('100%')
+      .opacity(this.ambientVisible ? 0.88 : 0)
+      .animation({ duration: FnMusicLoginMetrics.introContentDuration, curve: Curve.EaseOut })
+
+      LoginGridOverlay()
+        .opacity(this.ambientVisible ? 1 : 0)
+
+      Column()
+        .width('100%')
+        .height('100%')
+        .radialGradient({
+          center: ['0%', '100%'],
+          radius: '118%',
+          colors: [
+            [$r('app.color.login_ambient_clear'), 0.26],
+            [$r('app.color.login_canvas'), 1]
+          ]
+        })
+        .opacity(0.76)
+        .hitTestBehavior(HitTestMode.None)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.login_canvas'))
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .hitTestBehavior(HitTestMode.None)
+  }
+}
+
+@ComponentV2
+struct LoginIntroOverlay {
+  @Local visible: boolean = true;
+  @Local discAngle: number = 0;
+  @Local discOffsetY: number = 0;
+  @Local discScale: number = 1;
+  @Local discOpacity: number = 1;
+  @Event onComplete: () => void = (): void => {};
+  private timers: number[] = [];
+
+  aboutToAppear(): void {
+    this.timers = [
+      setTimeout((): void => {
+        this.getUIContext().animateTo({
+          duration: FnMusicLoginMetrics.introRotateDuration,
+          curve: Curve.Linear
+        }, (): void => {
+          this.discAngle = 62;
+        });
+      }, 40),
+      setTimeout((): void => {
+        this.getUIContext().animateTo({
+          duration: FnMusicLoginMetrics.introExitDuration,
+          curve: Curve.FastOutSlowIn
+        }, (): void => {
+          this.discAngle = 76;
+          this.discOffsetY = -720;
+          this.discScale = 1.14;
+          this.discOpacity = 0.72;
+        });
+      }, FnMusicLoginMetrics.introExitDelay),
+      setTimeout((): void => {
+        this.visible = false;
+        this.onComplete();
+      }, FnMusicLoginMetrics.introExitDelay + FnMusicLoginMetrics.introExitDuration)
+    ];
+  }
+
+  aboutToDisappear(): void {
+    this.timers.forEach((timer: number): void => clearTimeout(timer));
+    this.timers = [];
+  }
+
+  build() {
+    if (this.visible) {
+      Stack({ alignContent: Alignment.Center }) {
+        Image($r('app.media.login_record'))
+          .width(FnMusicLoginMetrics.introDiscSize)
+          .height(FnMusicLoginMetrics.introDiscSize)
+          .objectFit(ImageFit.Contain)
+          .rotate({ angle: this.discAngle })
+          .scale({ x: this.discScale, y: this.discScale })
+          .translate({ y: this.discOffsetY })
+          .opacity(this.discOpacity)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.login_canvas'))
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      .zIndex(20)
+      .hitTestBehavior(HitTestMode.Block)
+    }
+  }
+}
+
+@ComponentV2
 export struct LoginScreen {
   @Local insets: WindowInsetsState = connectWindowInsetsState();
   @Param runtime: AppRuntimeState = new AppRuntimeState();
@@ -15,6 +229,7 @@ export struct LoginScreen {
   @Local accessCode: string = '';
   @Local showPassword: boolean = false;
   @Local showAdvanced: boolean = false;
+  @Local introComplete: boolean = false;
   @Event onLogin: (credentials: LoginCredentials) => void = (_: LoginCredentials): void => {};
   @Event onRetry: () => void = (): void => {};
 
@@ -54,11 +269,7 @@ export struct LoginScreen {
 
   build() {
     Stack() {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor($r('app.color.login_canvas'))
-        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      LoginAmbientBackground({ ambientVisible: this.introComplete })
 
       Scroll() {
         Column() {
@@ -142,12 +353,12 @@ export struct LoginScreen {
           Row({ space: 6 }) {
             SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
               .fontSize(14)
-              .fontColor([$r('sys.color.icon_secondary')])
+              .fontColor([$r('app.color.login_text_secondary')])
             Text('登录信息仅保存在本机应用私有空间。')
               .layoutWeight(1)
               .fontSize(12)
               .lineHeight(18)
-              .fontColor($r('sys.color.font_secondary'))
+              .fontColor($r('app.color.login_text_secondary'))
           }
           .width('100%')
           .alignItems(VerticalAlign.Top)
@@ -159,13 +370,25 @@ export struct LoginScreen {
         .padding({
           left: FnMusicLoginMetrics.pageHorizontalPadding,
           right: FnMusicLoginMetrics.pageHorizontalPadding,
-          top: Math.max(0, this.insets.safeTop) + 18
+          top: Math.max(0, this.insets.safeTop) + 46
         })
       }
       .width('100%')
       .height('100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .opacity(this.introComplete ? 1 : 0)
+      .translate({ y: this.introComplete ? 0 : 12 })
+      .animation({
+        duration: FnMusicLoginMetrics.introContentDuration,
+        curve: Curve.FastOutSlowIn
+      })
+
+      LoginIntroOverlay({
+        onComplete: (): void => {
+          this.introComplete = true;
+        }
+      })
     }
     .width('100%')
     .height('100%')
@@ -176,25 +399,20 @@ export struct LoginScreen {
 struct LoginBrandHeaderV2 {
   build() {
     Row({ space: 14 }) {
-      Stack() {
-        SymbolGlyph($r('sys.symbol.music_note_list'))
-          .fontSize(25)
-          .fontColor([$r('app.color.brand_on_red')])
-      }
+      Image($r('app.media.startIcon'))
       .width(FnMusicLoginMetrics.brandMarkSize)
       .height(FnMusicLoginMetrics.brandMarkSize)
       .borderRadius(FnMusicLoginMetrics.brandMarkRadius)
       .clip(true)
-      .systemMaterial(FnMusicLoginMaterials.material(FnMusicLoginMaterialRole.BRAND_MARK))
 
       Column({ space: 3 }) {
         Text('飞牛音乐')
-          .fontSize(20)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('sys.color.font_primary'))
-        Text('连接你的飞牛服务器')
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.login_text_primary'))
+        Text('JGINYUE')
           .fontSize(FnMusicUI.supportingSize)
-          .fontColor($r('sys.color.font_secondary'))
+          .fontColor($r('app.color.login_text_secondary'))
       }
       .alignItems(HorizontalAlign.Start)
     }
@@ -227,8 +445,8 @@ struct NativeLoginFieldV2 {
           .width('100%')
           .height(FnMusicLoginMetrics.fieldHeight)
           .fontSize(FnMusicUI.bodySize)
-          .fontColor($r('sys.color.font_primary'))
-          .placeholderColor($r('sys.color.font_secondary'))
+          .fontColor($r('app.color.login_text_primary'))
+          .placeholderColor($r('app.color.login_text_secondary'))
           .caretColor($r('app.color.brand_red'))
           .backgroundColor(Color.Transparent)
           .padding({ left: 16, right: this.password && this.showVisibilityAction ? 48 : 16 })
@@ -271,7 +489,7 @@ struct NativeLoginFieldV2 {
         Button({ type: ButtonType.Circle, stateEffect: true }) {
           SymbolGlyph(this.showPassword ? $r('sys.symbol.eye_slash') : $r('sys.symbol.eye'))
             .fontSize(20)
-            .fontColor([$r('sys.color.icon_secondary')])
+            .fontColor([$r('app.color.login_text_secondary')])
         }
         .width(44)
         .height(44)
@@ -351,7 +569,7 @@ struct LoginStatusMessageV2 {
           .layoutWeight(1)
           .fontSize(FnMusicUI.supportingSize)
           .lineHeight(19)
-          .fontColor(this.errorState ? $r('app.color.danger') : $r('sys.color.font_secondary'))
+          .fontColor(this.errorState ? $r('app.color.danger') : $r('app.color.login_text_secondary'))
           .maxLines(3)
       }
       .width('100%')

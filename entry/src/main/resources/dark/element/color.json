@@ -10,7 +10,39 @@
     },
     {
       "name": "login_canvas",
-      "value": "#161618"
+      "value": "#0F0F0F"
+    },
+    {
+      "name": "login_text_primary",
+      "value": "#F5F5F7"
+    },
+    {
+      "name": "login_text_secondary",
+      "value": "#9B9BA1"
+    },
+    {
+      "name": "login_ambient_pink",
+      "value": "#D95A9F"
+    },
+    {
+      "name": "login_ambient_magenta",
+      "value": "#B948A6"
+    },
+    {
+      "name": "login_ambient_yellow",
+      "value": "#D9E65A"
+    },
+    {
+      "name": "login_ambient_orange",
+      "value": "#C86435"
+    },
+    {
+      "name": "login_ambient_white",
+      "value": "#D6E1E6"
+    },
+    {
+      "name": "login_ambient_clear",
+      "value": "#00000000"
     },
     {
       "name": "brand_red",

@@ -10,7 +10,39 @@
     },
     {
       "name": "login_canvas",
-      "value": "#F1F2F4"
+      "value": "#0F0F0F"
+    },
+    {
+      "name": "login_text_primary",
+      "value": "#F5F5F7"
+    },
+    {
+      "name": "login_text_secondary",
+      "value": "#9B9BA1"
+    },
+    {
+      "name": "login_ambient_pink",
+      "value": "#D95A9F"
+    },
+    {
+      "name": "login_ambient_magenta",
+      "value": "#B948A6"
+    },
+    {
+      "name": "login_ambient_yellow",
+      "value": "#D9E65A"
+    },
+    {
+      "name": "login_ambient_orange",
+      "value": "#C86435"
+    },
+    {
+      "name": "login_ambient_white",
+      "value": "#D6E1E6"
+    },
+    {
+      "name": "login_ambient_clear",
+      "value": "#00000000"
     },
     {
       "name": "brand_red",
@@ -30,15 +62,15 @@
     },
     {
       "name": "login_material_tint",
-      "value": "#A8FFFFFF"
+      "value": "#2EFFFFFF"
     },
     {
       "name": "login_disabled_fill",
-      "value": "#1F182024"
+      "value": "#24FFFFFF"
     },
     {
       "name": "login_disabled_text",
-      "value": "#73182024"
+      "value": "#73FFFFFF"
     },
     {
       "name": "focus_outline",
