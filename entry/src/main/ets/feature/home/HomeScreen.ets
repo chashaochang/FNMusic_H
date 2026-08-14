@@ -48,7 +48,6 @@ struct HomeStickyChipHeader {
       MusicChipStrip({
         items: this.items,
         selectedId: this.state.selectedId,
-        transparentSurface: true,
         onSelect: (id: string): void => {
           this.onSelect(id);
         }
