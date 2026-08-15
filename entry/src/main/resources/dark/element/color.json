@@ -61,6 +61,26 @@
       "value": "#14121B"
     },
     {
+      "name": "album_detail_background",
+      "value": "#09090B"
+    },
+    {
+      "name": "album_hero_top_scrim",
+      "value": "#38000000"
+    },
+    {
+      "name": "album_hero_middle_scrim",
+      "value": "#7809090B"
+    },
+    {
+      "name": "album_hero_vignette",
+      "value": "#8A000000"
+    },
+    {
+      "name": "album_cover_shadow",
+      "value": "#A8000000"
+    },
+    {
       "name": "page_favorite_background_start",
       "value": "#5B181F"
     },
@@ -293,6 +313,22 @@
       "value": "#33FFFFFF"
     },
     {
+      "name": "music_chip_selected_material",
+      "value": "#CCFFFFFF"
+    },
+    {
+      "name": "music_chip_selected_text",
+      "value": "#FF151518"
+    },
+    {
+      "name": "detail_segment_selected_material",
+      "value": "#66FFFFFF"
+    },
+    {
+      "name": "detail_segment_selected_text",
+      "value": "#FFFFFFFF"
+    },
+    {
       "name": "chip_idle",
       "value": "#2C2C2E"
     },
@@ -309,12 +345,44 @@
       "value": "#01000000"
     },
     {
+      "name": "player_lyric_inactive",
+      "value": "#47FFFFFF"
+    },
+    {
       "name": "surface_elevated",
       "value": "#FA252528"
     },
     {
+      "name": "mini_player_play_background",
+      "value": "#E6FFFFFF"
+    },
+    {
+      "name": "mini_player_play_foreground",
+      "value": "#FF000000"
+    },
+    {
       "name": "divider",
       "value": "#29FFFFFF"
+    },
+    {
+      "name": "genre_card_text_secondary",
+      "value": "#E6FFFFFF"
+    },
+    {
+      "name": "genre_card_overlay_end",
+      "value": "#B3000000"
+    },
+    {
+      "name": "genre_card_surface",
+      "value": "#493638"
+    },
+    {
+      "name": "album_count_badge_bg",
+      "value": "#B3000000"
+    },
+    {
+      "name": "album_count_badge_text",
+      "value": "#FFFFFFFF"
     },
     {
       "name": "outline",

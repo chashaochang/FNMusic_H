@@ -2,18 +2,45 @@ import { FnMusicUI } from '../../design/FnMusicUI';
 import { FnMusicMaterialRole, FnMusicMaterials } from '../../design/FnMusicMaterials';
 import { MusicAlbum, MusicArtist, MusicTrack } from '../../model/MusicModels';
 import {
-  AlbumRow,
-  ArtistRow,
   EmptyMusicState,
   MusicChipItem,
-  MusicChipStrip,
-  TrackRow
+  MusicChipStrip
 } from '../common/MusicUiComponents';
+import { AlbumGrid, ArtistListItem, DenseTrackRow } from '../library/LibraryVisualComponents';
 
 export interface SearchRequest {
   query: string;
   kind: string;
   immediate: boolean;
+}
+
+@ObservedV2
+class SearchSectionState {
+  @Trace selectedId: string = 'tracks';
+}
+
+@ComponentV2
+struct SearchStickyChipHeader {
+  @Param items: MusicChipItem[] = [];
+  @Param state: SearchSectionState = new SearchSectionState();
+  @Event onSelect: (id: string) => void = (_: string): void => {};
+
+  build() {
+    Row() {
+      MusicChipStrip({
+        items: this.items,
+        selectedId: this.state.selectedId,
+        onSelect: (id: string): void => this.onSelect(id)
+      })
+    }
+    .width('100%')
+    .height(FnMusicUI.chipHeight + FnMusicUI.compactGap)
+    .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+    .alignItems(VerticalAlign.Center)
+    .backgroundColor(Color.Transparent)
+    .zIndex(100)
+    .hitTestBehavior(HitTestMode.Transparent)
+  }
 }
 
 @ComponentV2
@@ -29,24 +56,27 @@ struct SearchTrackResults {
       } else {
         Repeat<MusicTrack>(this.tracks)
           .each((repeatItem: RepeatItem<MusicTrack>): void => {
-            TrackRow({
-              track: repeatItem.item,
-              index: repeatItem.index,
-              onPlay: (index: number): void => {
-                this.onPlay(this.tracks, index);
-              },
-              onMore: (track: MusicTrack): void => {
-                this.onMore(track);
-              }
-            })
+            Column() {
+              DenseTrackRow({
+                track: repeatItem.item,
+                index: repeatItem.index,
+                onPlay: (index: number): void => {
+                  this.onPlay(this.tracks, index);
+                },
+                onMore: (track: MusicTrack): void => {
+                  this.onMore(track);
+                }
+              })
+              Divider()
+                .strokeWidth(0.5)
+                .color($r('app.color.divider'))
+                .margin({ left: 52 })
+            }
           })
           .key((item: MusicTrack): string => item.guid)
       }
     }
     .width('100%')
-    .padding({ left: 10, right: 8 })
-    .borderRadius(FnMusicUI.cardRadius)
-      .backgroundColor($r('app.color.surface'))
   }
 }
 
@@ -56,21 +86,15 @@ struct SearchAlbumResults {
   @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   build() {
-    Column() {
-      if (this.albums.length === 0) {
-        EmptyMusicState({ title: '没有找到专辑', message: '换个关键词再试试。', symbol: $r('sys.symbol.magnifyingglass') })
-      } else {
-        Repeat<MusicAlbum>(this.albums)
-          .each((repeatItem: RepeatItem<MusicAlbum>): void => {
-            AlbumRow({ album: repeatItem.item, onOpen: (album: MusicAlbum): void => this.onOpen(album) })
-          })
-          .key((item: MusicAlbum): string => item.guid)
-      }
+    if (this.albums.length === 0) {
+      EmptyMusicState({ title: '没有找到专辑', message: '换个关键词再试试。', symbol: $r('sys.symbol.magnifyingglass') })
+    } else {
+      AlbumGrid({
+        albums: this.albums,
+        showPlay: false,
+        onOpen: (album: MusicAlbum): void => this.onOpen(album)
+      })
     }
-    .width('100%')
-    .padding({ left: 10, right: 10 })
-    .borderRadius(FnMusicUI.cardRadius)
-    .backgroundColor($r('app.color.surface'))
   }
 }
 
@@ -86,15 +110,18 @@ struct SearchArtistResults {
       } else {
         Repeat<MusicArtist>(this.artists)
           .each((repeatItem: RepeatItem<MusicArtist>): void => {
-            ArtistRow({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+            Column() {
+              ArtistListItem({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+              Divider()
+                .strokeWidth(0.5)
+                .color($r('app.color.divider'))
+                .margin({ left: 60 })
+            }
           })
           .key((item: MusicArtist): string => item.guid)
       }
     }
     .width('100%')
-    .padding({ left: 10, right: 10 })
-    .borderRadius(FnMusicUI.cardRadius)
-    .backgroundColor($r('app.color.surface'))
   }
 }
 
@@ -171,7 +198,7 @@ export struct SearchScreen {
   @Param loading: boolean = false;
   @Param errorMessage: string = '';
   @Local query: string = '';
-  @Local selectedKind: string = 'tracks';
+  @Local sectionState: SearchSectionState = new SearchSectionState();
   @Local recentSearches: string[] = [];
   private debounceTimer: number = -1;
   @Event onBack: () => void = (): void => {};
@@ -201,7 +228,7 @@ export struct SearchScreen {
     }
     this.debounceTimer = setTimeout((): void => {
       this.debounceTimer = -1;
-      this.onSearch({ query: this.query.trim(), kind: this.selectedKind, immediate: false });
+      this.onSearch({ query: this.query.trim(), kind: this.sectionState.selectedId, immediate: false });
     }, 400);
   }
 
@@ -214,11 +241,23 @@ export struct SearchScreen {
     }
     const filtered: string[] = this.recentSearches.filter((item: string): boolean => item !== normalized);
     this.recentSearches = [normalized].concat(filtered).slice(0, 8);
-    this.onSearch({ query: normalized, kind: this.selectedKind, immediate: immediate });
+    this.onSearch({ query: normalized, kind: this.sectionState.selectedId, immediate: immediate });
   }
 
   aboutToDisappear(): void {
     this.cancelDebounce();
+  }
+
+  @Builder
+  searchStickyHeader() {
+    SearchStickyChipHeader({
+      items: this.kinds,
+      state: this.sectionState,
+      onSelect: (id: string): void => {
+        this.sectionState.selectedId = id;
+        this.executeSearch(this.query, true);
+      }
+    })
   }
 
   build() {
@@ -268,9 +307,9 @@ export struct SearchScreen {
       })
       .backgroundColor(Color.Transparent)
 
-      Scroll() {
-        Column({ space: FnMusicUI.sectionGap }) {
-          if (this.query.trim().length === 0) {
+      List({ space: 0 }) {
+        if (this.query.trim().length === 0) {
+          ListItem() {
             RecentSearches({
               searches: this.recentSearches,
               onSelect: (value: string): void => {
@@ -280,68 +319,67 @@ export struct SearchScreen {
                 this.recentSearches = [];
               }
             })
-          } else {
-            MusicChipStrip({
-              items: this.kinds,
-              selectedId: this.selectedKind,
-              onSelect: (id: string): void => {
-                this.selectedKind = id;
-                this.executeSearch(this.query, true);
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.contentGap
+          })
+        } else {
+          ListItemGroup({ header: this.searchStickyHeader }) {
+            ListItem() {
+              if (this.loading) {
+                Column({ space: FnMusicUI.compactGap }) {
+                  LoadingProgress()
+                    .width(28)
+                    .height(28)
+                    .color($r('app.color.accent'))
+                  Text('正在搜索')
+                    .fontSize(FnMusicUI.supportingSize)
+                    .fontColor($r('app.color.text_secondary'))
+                }
+                .width('100%')
+                .height(180)
+                .justifyContent(FlexAlign.Center)
+              } else if (this.errorMessage.length > 0) {
+                EmptyMusicState({
+                  title: '搜索失败',
+                  message: this.errorMessage,
+                  symbol: $r('sys.symbol.exclamationmark_circle_fill')
+                })
+              } else if (this.sectionState.selectedId === 'tracks') {
+                SearchTrackResults({
+                  tracks: this.tracks,
+                  onPlay: (tracks: MusicTrack[], index: number): void => this.onPlay(tracks, index),
+                  onMore: (track: MusicTrack): void => this.onTrackMore(track)
+                })
+              } else if (this.sectionState.selectedId === 'albums') {
+                SearchAlbumResults({
+                  albums: this.albums,
+                  onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album)
+                })
+              } else {
+                SearchArtistResults({
+                  artists: this.artists,
+                  onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
+                })
               }
-            })
-
-            if (this.loading) {
-              Column({ space: FnMusicUI.compactGap }) {
-                LoadingProgress()
-                  .width(28)
-                  .height(28)
-                  .color($r('app.color.accent'))
-                Text('正在搜索')
-                  .fontSize(FnMusicUI.supportingSize)
-                  .fontColor($r('app.color.text_secondary'))
-              }
-              .width('100%')
-              .height(180)
-              .justifyContent(FlexAlign.Center)
-            } else if (this.errorMessage.length > 0) {
-              EmptyMusicState({
-                title: '搜索失败',
-                message: this.errorMessage,
-                symbol: $r('sys.symbol.exclamationmark_circle_fill')
-              })
-            } else if (this.selectedKind === 'tracks') {
-              SearchTrackResults({
-                tracks: this.tracks,
-                onPlay: (tracks: MusicTrack[], index: number): void => this.onPlay(tracks, index),
-                onMore: (track: MusicTrack): void => this.onTrackMore(track)
-              })
-            } else if (this.selectedKind === 'albums') {
-              SearchAlbumResults({
-                albums: this.albums,
-                onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album)
-              })
-            } else {
-              SearchArtistResults({
-                artists: this.artists,
-                onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
-              })
             }
+            .padding({
+              left: FnMusicUI.pagePadding,
+              right: FnMusicUI.pagePadding,
+              top: FnMusicUI.contentGap
+            })
           }
         }
-        .width('100%')
-        .padding({
-          left: FnMusicUI.pagePadding,
-          right: FnMusicUI.pagePadding,
-          top: FnMusicUI.contentGap,
-          bottom: this.bottomInset + FnMusicUI.sectionGap
-        })
-        .alignItems(HorizontalAlign.Start)
+
+        ListItem().height(this.bottomInset + FnMusicUI.sectionGap)
       }
       .layoutWeight(1)
       .width('100%')
-      .align(Alignment.Top)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .sticky(StickyStyle.Header)
     }
     .width('100%')
     .height('100%')

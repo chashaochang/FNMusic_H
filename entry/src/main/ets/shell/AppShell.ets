@@ -17,6 +17,7 @@ import {
 import { TrackActionsSheet } from '../feature/library/TrackActionsSheet';
 import { TrackListScreen } from '../feature/library/TrackListScreen';
 import { PlaylistEditMode, PlaylistEditSheet } from '../feature/playlist/PlaylistEditSheet';
+import { PlaylistScreen } from '../feature/playlist/PlaylistScreen';
 import {
   CollectionKind,
   MusicAlbum,
@@ -75,6 +76,7 @@ export enum AppShellPage {
 
 enum RootTab {
   HOME = 'home',
+  PLAYLIST = 'playlist',
   PROFILE = 'profile'
 }
 
@@ -206,19 +208,30 @@ struct HomeBottomChrome {
 
   private chromeHeight(): number {
     return Math.max(0, this.safeBottom) + FnMusicUI.bottomBarHeight +
-      (this.hasPlayer() ? FnMusicUI.miniPlayerHeight + FnMusicUI.compactPlayerGap : 0);
+      (this.hasPlayer() ? FnMusicUI.homeMiniPlayerHeight + FnMusicUI.compactPlayerGap : 0);
   }
 
   private navigationTop(): number {
-    return this.hasPlayer() ? FnMusicUI.miniPlayerHeight + FnMusicUI.compactPlayerGap : 0;
+    return this.hasPlayer() ? FnMusicUI.homeMiniPlayerHeight + FnMusicUI.compactPlayerGap : 0;
+  }
+
+  private playerHeight(): number {
+    return this.interpolate(FnMusicUI.homeMiniPlayerHeight, FnMusicUI.compactPlayerHeight);
+  }
+
+  private expandedChromeWidth(): number {
+    return Math.max(220, this.availableWidth - FnMusicUI.bottomBarSideMargin * 2);
   }
 
   private navigationWidth(): number {
-    return this.hasPlayer() ? 160 + (FnMusicUI.bottomBarHeight - 160) * this.navigationProgress() : 160;
+    const expandedWidth: number = this.expandedChromeWidth();
+    return this.hasPlayer() ? expandedWidth +
+      (FnMusicUI.bottomBarHeight - expandedWidth) * this.navigationProgress() : expandedWidth;
   }
 
   private navigationX(): number {
-    const centered = Math.max(FnMusicUI.bottomBarSideMargin, (this.availableWidth - 160) / 2);
+    const centered = Math.max(FnMusicUI.bottomBarSideMargin,
+      (this.availableWidth - this.expandedChromeWidth()) / 2);
     return this.hasPlayer() ? centered +
       (FnMusicUI.bottomBarSideMargin - centered) * this.navigationProgress() : centered;
   }
@@ -229,7 +242,7 @@ struct HomeBottomChrome {
   }
 
   private playerWidth(): number {
-    const expanded = Math.max(220, this.availableWidth - FnMusicUI.bottomBarSideMargin * 2);
+    const expanded = this.expandedChromeWidth();
     const compact = Math.max(180, this.availableWidth - this.playerX() - FnMusicUI.bottomBarSideMargin);
     return this.interpolate(expanded, compact);
   }
@@ -244,10 +257,10 @@ struct HomeBottomChrome {
         Row() {
           Column({ space: 4 }) {
             SymbolGlyph(this.selectedTab === RootTab.HOME ? $r('sys.symbol.house_fill') : $r('sys.symbol.house'))
-              .fontSize(20)
+              .fontSize(22)
               .fontColor([this.tabColor(RootTab.HOME)])
             Text('首页')
-              .fontSize(14)
+              .fontSize(12)
               .fontColor(this.tabColor(RootTab.HOME))
           }
           .layoutWeight(1)
@@ -256,11 +269,24 @@ struct HomeBottomChrome {
           .onClick((): void => this.onSelectTab(RootTab.HOME))
 
           Column({ space: 4 }) {
-            SymbolGlyph(this.selectedTab === RootTab.PROFILE ? $r('sys.symbol.person_fill') : $r('sys.symbol.person'))
-              .fontSize(20)
+            SymbolGlyph($r('sys.symbol.music_note_list'))
+              .fontSize(22)
+              .fontColor([this.tabColor(RootTab.PLAYLIST)])
+            Text('歌单')
+              .fontSize(12)
+              .fontColor(this.tabColor(RootTab.PLAYLIST))
+          }
+          .layoutWeight(1)
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .onClick((): void => this.onSelectTab(RootTab.PLAYLIST))
+
+          Column({ space: 4 }) {
+            SymbolGlyph($r('sys.symbol.person_crop_circle_fill'))
+              .fontSize(22)
               .fontColor([this.tabColor(RootTab.PROFILE)])
             Text('我的')
-              .fontSize(14)
+              .fontSize(12)
               .fontColor(this.tabColor(RootTab.PROFILE))
           }
           .layoutWeight(1)
@@ -298,6 +324,7 @@ struct HomeBottomChrome {
       MiniPlayerBar({
         state: this.playerState,
         placement: PlayerHostPlacement.COMPACT_HOME,
+        heightOverride: this.playerHeight(),
         transitionId: HOME_PLAYER_TRANSITION_ID,
         onExpand: (): void => this.onExpand(),
         onToggle: (): void => {
@@ -309,10 +336,10 @@ struct HomeBottomChrome {
         onQueue: (): void => this.onQueue()
       })
       .width(this.playerWidth())
-      .height(FnMusicUI.miniPlayerHeight)
+      .height(this.playerHeight())
       .position({
         x: this.playerX(),
-        y: this.interpolate(0, FnMusicUI.miniPlayerHeight + FnMusicUI.compactPlayerGap)
+        y: this.interpolate(0, FnMusicUI.homeMiniPlayerHeight + FnMusicUI.compactPlayerGap)
       })
       }
     }
@@ -342,6 +369,17 @@ export class AppShellController {
   handleBack(): boolean {
     return this.backHandler?.() ?? false;
   }
+}
+
+class ArtistDetailSnapshot {
+  collectionId: string = '';
+  pageTitle: string = '';
+  pageSubtitle: string = '';
+  pageSymbol: Resource = $r('sys.symbol.person_fill');
+  artist: MusicArtist = new MusicArtist();
+  tracks: MusicTrack[] = [];
+  loading: boolean = false;
+  errorMessage: string = '';
 }
 
 @ComponentV2
@@ -394,14 +432,33 @@ export struct AppShell {
   private pathStack: NavPathStack = new NavPathStack();
   private playerTransitionInProgress: boolean = false;
   private pendingPlayerMinimizeAction?: () => void = undefined;
+  private artistDetailSnapshot?: ArtistDetailSnapshot = undefined;
 
   @Monitor('rootTab')
   onRootTabChanged(): void {
-    this.tabsController.changeIndex(this.rootTab === RootTab.HOME ? 0 : 1);
+    this.tabsController.changeIndex(this.rootTabIndex(this.rootTab));
     if (this.rootTab !== RootTab.HOME) {
       this.homeChromeProgress = 0;
       this.homeSectionPinned = false;
     }
+  }
+
+  private rootTabIndex(tab: RootTab): number {
+    if (tab === RootTab.PLAYLIST) return 1;
+    if (tab === RootTab.PROFILE) return 2;
+    return 0;
+  }
+
+  private rootTabFromIndex(index: number): RootTab {
+    if (index === 1) return RootTab.PLAYLIST;
+    if (index === 2) return RootTab.PROFILE;
+    return RootTab.HOME;
+  }
+
+  private rootTitle(): string {
+    if (this.rootTab === RootTab.PLAYLIST) return '歌单';
+    if (this.rootTab === RootTab.PROFILE) return '我的';
+    return '首页';
   }
 
   private navigationTitleBar(): HdsNavigationTitleBarOptions {
@@ -410,7 +467,7 @@ export struct AppShell {
       enableComponentSafeArea: false,
       content: {
         title: {
-          mainTitle: this.rootTab === RootTab.HOME ? '首页' : '我的',
+          mainTitle: this.rootTitle(),
           mainTitleSize: TitleSize.TITLE_S
         },
         menu: {
@@ -420,7 +477,13 @@ export struct AppShell {
               label: '搜索',
               action: (): void => this.openPage(AppShellPage.SEARCH)
             }
-          }] : [],
+          }] : (this.rootTab === RootTab.PLAYLIST ? [{
+            content: {
+              icon: $r('sys.symbol.plus_circle'),
+              label: '新建歌单',
+              action: (): void => this.beginCreatePlaylist()
+            }
+          }] : []),
           maxCount: 1
         }
       },
@@ -475,10 +538,10 @@ export struct AppShell {
   private rootTabBar(title: string, tab: RootTab, symbol: Resource) {
     Column({ space: 4 }) {
       SymbolGlyph(symbol)
-        .fontSize(20)
+        .fontSize(22)
         .fontColor([this.rootTab === tab ? $r('app.color.accent') : $r('app.color.text_primary')])
       Text(title)
-        .fontSize(14)
+        .fontSize(12)
         .fontColor(this.rootTab === tab ? $r('app.color.accent') : $r('app.color.text_primary'))
     }
     .width('100%')
@@ -490,7 +553,7 @@ export struct AppShell {
   private rootTabs() {
     Stack({ alignContent: Alignment.BottomStart }) {
       HdsTabs({
-      index: this.rootTab === RootTab.HOME ? 0 : 1,
+      index: this.rootTabIndex(this.rootTab),
       barPosition: BarPosition.End,
       controller: this.tabsController
     }) {
@@ -510,7 +573,13 @@ export struct AppShell {
             this.homeChromeProgress = progress;
           },
           onOpenSearch: (): void => this.openPage(AppShellPage.SEARCH),
-          onOpenCollection: (id: string, title: string): void => this.openCollection(id, title),
+          onOpenCollection: (id: string, title: string): void => {
+            if (id === CollectionKind.RECENTLY_ADDED) {
+              this.openCollection(CollectionKind.LIBRARY, '音乐库');
+              return;
+            }
+            this.openCollection(id, title);
+          },
           onPlayCollection: (id: string): void => {
             this.playCollection(id);
           },
@@ -533,6 +602,21 @@ export struct AppShell {
         this.rootTab === RootTab.HOME ? $r('sys.symbol.house_fill') : $r('sys.symbol.house')))
 
       TabContent() {
+        PlaylistScreen({
+          playlists: this.playlists(),
+          safeTop: this.safeTop,
+          bottomInset: this.bottomAvoidance(),
+          onOpenPlaylist: (playlist: MusicPlaylist): void => this.openPlaylist(playlist),
+          onPlaylistMore: (playlist: MusicPlaylist): void => {
+            this.activePlaylist = playlist;
+            this.playlistEditMode = PlaylistEditMode.EDIT;
+            this.showPlaylistEditor = true;
+          }
+        })
+      }
+      .tabBar(this.rootTabBar('歌单', RootTab.PLAYLIST, $r('sys.symbol.music_note_list')))
+
+      TabContent() {
         ProfileScreen({
           user: this.currentUser(), playlists: this.playlists(),
           bottomInset: this.bottomAvoidance(),
@@ -543,16 +627,14 @@ export struct AppShell {
             this.showPlaylistEditor = true;
           },
           onCreatePlaylist: (): void => {
-            this.playlistEditMode = PlaylistEditMode.CREATE;
-            this.activePlaylist = new MusicPlaylist();
-            this.showPlaylistEditor = true;
+            this.beginCreatePlaylist();
           },
           onOpenSettings: (): void => { this.showSettings = true; },
           onLogout: (): void => this.onLogout()
         })
       }
       .tabBar(this.rootTabBar('我的', RootTab.PROFILE,
-        this.rootTab === RootTab.PROFILE ? $r('sys.symbol.person_fill') : $r('sys.symbol.person')))
+        $r('sys.symbol.person_crop_circle_fill')))
     }
     .barHeight(0)
     .barMode(BarMode.Fixed, { nonScrollableLayoutStyle: LayoutStyle.ALWAYS_CENTER })
@@ -562,9 +644,9 @@ export struct AppShell {
     .animationDuration(0)
     .scrollable(false)
     .width('100%')
-    .height('100%')
+      .height('100%')
       .onTabBarClick((index: number): void => {
-        this.rootTab = index === 0 ? RootTab.HOME : RootTab.PROFILE;
+        this.rootTab = this.rootTabFromIndex(index);
       })
 
       HomeBottomChrome({
@@ -599,6 +681,12 @@ export struct AppShell {
       this.homeSectionPinned = false;
     });
     this.homeScroller.scrollEdge(Edge.Start);
+  }
+
+  private beginCreatePlaylist(): void {
+    this.playlistEditMode = PlaylistEditMode.CREATE;
+    this.activePlaylist = new MusicPlaylist();
+    this.showPlaylistEditor = true;
   }
 
   private hasPlayer(): boolean {
@@ -661,6 +749,50 @@ export struct AppShell {
       return this.runtime.albums;
     }
     return appSession.albums;
+  }
+
+  private albumsForArtist(artist: MusicArtist): MusicAlbum[] {
+    const artistName: string = artist.name.trim().toLocaleLowerCase();
+    if (artistName.length === 0 || this.activeCollectionId !== CollectionKind.ARTIST) {
+      return [];
+    }
+    const albums: MusicAlbum[] = [];
+    this.activeTracks.forEach((track: MusicTrack): void => {
+      const belongsToArtist: boolean = track.artists.some((item: MusicArtist): boolean =>
+        item.guid === artist.guid || item.name.trim().toLocaleLowerCase() === artistName);
+      if (!belongsToArtist && track.artistGuid !== artist.guid &&
+        !track.artistName.toLocaleLowerCase().split(' / ').some((name: string): boolean => name.trim() === artistName)) {
+        return;
+      }
+      const albumGuid: string = track.albumGuid.length > 0 ? track.albumGuid : track.album.guid;
+      const albumName: string = track.albumName.length > 0 ? track.albumName : track.album.name;
+      if (albumGuid.length === 0 && albumName.length === 0) {
+        return;
+      }
+      const existing: MusicAlbum | undefined = albums.find((item: MusicAlbum): boolean =>
+        (albumGuid.length > 0 && item.guid === albumGuid) ||
+          (albumGuid.length === 0 && item.name === albumName));
+      if (existing !== undefined) {
+        if (existing.trackCount <= 0) {
+          existing.trackCount += 1;
+        }
+        return;
+      }
+      const catalogAlbum: MusicAlbum | undefined = this.albums().find((item: MusicAlbum): boolean =>
+        (albumGuid.length > 0 && item.guid === albumGuid) || item.name === albumName);
+      const source: MusicAlbum = catalogAlbum ?? track.album;
+      const album = new MusicAlbum(
+        albumGuid,
+        albumName.length > 0 ? albumName : source.name,
+        source.coverId.length > 0 ? source.coverId : track.coverId,
+        source.year > 0 ? source.year : track.year,
+        artist.name
+      );
+      album.trackCount = source.trackCount > 0 ? source.trackCount : 1;
+      album.createdAt = source.createdAt > 0 ? source.createdAt : track.createdAt;
+      albums.push(album);
+    });
+    return albums;
   }
 
   private artists(): MusicArtist[] {
@@ -754,8 +886,12 @@ export struct AppShell {
   }
 
   private playerTransitionRadius(): number {
-    return this.page === AppShellPage.ROOT && this.rootTab === RootTab.HOME ?
-      FnMusicUI.miniPlayerHeight / 2 : FnMusicUI.floatingPlayerHeight / 2;
+    if (this.page === AppShellPage.ROOT && this.rootTab === RootTab.HOME) {
+      const progress: number = Math.max(0, Math.min(1, this.homeChromeProgress));
+      return (FnMusicUI.homeMiniPlayerHeight +
+        (FnMusicUI.compactPlayerHeight - FnMusicUI.homeMiniPlayerHeight) * progress) / 2;
+    }
+    return FnMusicUI.floatingPlayerHeight / 2;
   }
 
   private finishPlayerMinimize(): void {
@@ -779,8 +915,16 @@ export struct AppShell {
     }
     if (this.page === AppShellPage.ALBUM_DETAIL || this.page === AppShellPage.ARTIST_DETAIL ||
       this.page === AppShellPage.GENRE_DETAIL) {
+      const leavingPage: AppShellPage = this.page;
       this.pathStack.pop();
       this.syncPageFromPathStack();
+      if (leavingPage === AppShellPage.ALBUM_DETAIL && this.page === AppShellPage.ARTIST_DETAIL &&
+        this.artistDetailSnapshot !== undefined) {
+        this.restoreArtistDetail(this.artistDetailSnapshot);
+        this.artistDetailSnapshot = undefined;
+      } else if (this.page !== AppShellPage.ARTIST_DETAIL) {
+        this.artistDetailSnapshot = undefined;
+      }
       return;
     }
     if (this.page === AppShellPage.PLAYER) {
@@ -837,6 +981,31 @@ export struct AppShell {
     if (this.runtime !== undefined) {
       this.loadDetail(() => AppRuntime.albumTracks(album.guid));
     }
+  }
+
+  private openAlbumFromArtist(album: MusicAlbum): void {
+    const snapshot = new ArtistDetailSnapshot();
+    snapshot.collectionId = this.activeCollectionId;
+    snapshot.pageTitle = this.pageTitle;
+    snapshot.pageSubtitle = this.pageSubtitle;
+    snapshot.pageSymbol = this.pageSymbol;
+    snapshot.artist = this.activeArtist;
+    snapshot.tracks = this.activeTracks.slice();
+    snapshot.loading = this.activeTracksLoading;
+    snapshot.errorMessage = this.activeTracksError;
+    this.artistDetailSnapshot = snapshot;
+    this.openAlbum(album);
+  }
+
+  private restoreArtistDetail(snapshot: ArtistDetailSnapshot): void {
+    this.activeCollectionId = snapshot.collectionId;
+    this.pageTitle = snapshot.pageTitle;
+    this.pageSubtitle = snapshot.pageSubtitle;
+    this.pageSymbol = snapshot.pageSymbol;
+    this.activeArtist = snapshot.artist;
+    this.activeTracks = snapshot.tracks;
+    this.activeTracksLoading = snapshot.loading;
+    this.activeTracksError = snapshot.errorMessage;
   }
 
   private openArtist(artist: MusicArtist): void {
@@ -976,6 +1145,20 @@ export struct AppShell {
     }
   }
 
+  private setTrackFavorite(track: MusicTrack, favorite: boolean): void {
+    if (this.runtime === undefined) {
+      this.syncFavoriteState(track.guid, favorite);
+      FnToast.show(favorite ? '已收藏' : '已取消收藏');
+      return;
+    }
+    AppRuntime.setFavorite(track, favorite).then((): void => {
+      this.syncFavoriteState(track.guid, favorite);
+      FnToast.show(favorite ? '已收藏' : '已取消收藏');
+    }).catch((error: Error): void => {
+      FnToast.show(error.message || '收藏操作失败');
+    });
+  }
+
   private async savePlaylist(name: string): Promise<void> {
     if (this.runtime !== undefined) {
       try {
@@ -1011,7 +1194,6 @@ export struct AppShell {
         this.showPlaylistEditor = false;
         if (this.page === AppShellPage.PLAYLIST_DETAIL) {
           this.page = AppShellPage.ROOT;
-          this.rootTab = RootTab.PROFILE;
         }
         FnToast.show('歌单已删除');
       } catch (error) {
@@ -1024,7 +1206,6 @@ export struct AppShell {
     this.showPlaylistEditor = false;
     if (this.page === AppShellPage.PLAYLIST_DETAIL) {
       this.page = AppShellPage.ROOT;
-      this.rootTab = RootTab.PROFILE;
     }
     FnToast.show('歌单已删除');
   }
@@ -1117,17 +1298,7 @@ export struct AppShell {
         playlists: this.playlists(),
         onBack: (): void => this.goBack(),
         onFavorite: (track: MusicTrack, favorite: boolean): void => {
-          if (this.runtime === undefined) {
-            this.syncFavoriteState(track.guid, favorite);
-            FnToast.show(favorite ? '已收藏' : '已取消收藏');
-            return;
-          }
-          AppRuntime.setFavorite(track, favorite).then((): void => {
-            this.syncFavoriteState(track.guid, favorite);
-            FnToast.show(favorite ? '已收藏' : '已取消收藏');
-          }).catch((error: Error): void => {
-            FnToast.show(error.message || '收藏操作失败');
-          });
+          this.setTrackFavorite(track, favorite);
         },
         onOpenAlbum: (track: MusicTrack): void => {
           const album = this.albums().find((item: MusicAlbum): boolean =>
@@ -1197,7 +1368,10 @@ export struct AppShell {
           safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
           onBack: (): void => this.goBack(),
-          onOpen: (album: MusicAlbum): void => this.openAlbum(album)
+          onOpen: (album: MusicAlbum): void => this.openAlbum(album),
+          onPlay: (album: MusicAlbum): void => {
+            this.playAlbum(album);
+          }
         })
       } else if (name === AppShellPage.ARTISTS) {
         ArtistCollectionScreen({
@@ -1221,6 +1395,11 @@ export struct AppShell {
           subtitle: this.pageSubtitle,
           collectionId: this.activeCollectionId,
           tracks: this.activeTracks,
+          artistAlbums: this.albumsForArtist(this.activeArtist),
+          album: this.activeAlbum,
+          artist: this.activeArtist,
+          genre: this.activeGenre,
+          playlist: this.activePlaylist,
           symbol: this.pageSymbol,
           canRemoveFromPlaylist: name === AppShellPage.PLAYLIST_DETAIL,
           safeTop: this.safeTop,
@@ -1229,6 +1408,9 @@ export struct AppShell {
           errorMessage: this.activeTracksError,
           onBack: (): void => this.goBack(),
           onPlay: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
+          onFavorite: (track: MusicTrack, favorite: boolean): void =>
+            this.setTrackFavorite(track, favorite),
+          onOpenAlbum: (album: MusicAlbum): void => this.openAlbumFromArtist(album),
           onTrackMore: (track: MusicTrack, canRemove: boolean): void => this.showTrackMenu(track, canRemove),
           onPageMore: (): void => {
             if (name === AppShellPage.PLAYLIST_DETAIL) {
@@ -1358,9 +1540,13 @@ export struct AppShell {
           onSelect: (index: number): void => {
             this.playback.playAt(index).catch((): void => {});
           },
+          onRemove: (index: number): void => {
+            this.playback.removeQueueItem(index).catch((): void => {});
+          },
           onClear: (): void => {
             this.playback.clearQueue().catch((): void => {});
-          }
+          },
+          onRepeat: (): void => this.playback.cycleRepeatMode()
         })
         .zIndex(300)
       }

@@ -44,6 +44,7 @@ export default class EntryAbility extends UIAbility {
 
   onCreate(_want: Want, _launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, TAG, '%{public}s', 'EntryAbility created');
+    this.lockDarkMode();
     AppRuntime.initialize(this.context as common.UIAbilityContext);
     MusicPreferenceStore.initialize(this.context as common.UIAbilityContext);
     MusicPlaybackController.instance().initialize(this.context as common.UIAbilityContext);
@@ -97,6 +98,14 @@ export default class EntryAbility extends UIAbility {
     ) / density;
   }
 
+  private lockDarkMode(): void {
+    try {
+      this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+    } catch (error) {
+      hilog.error(DOMAIN, TAG, 'Failed to lock dark color mode: %{public}s', JSON.stringify(error));
+    }
+  }
+
   onWindowStageCreate(windowStage: window.WindowStage): void {
     ezCustomTransition.init(windowStage);
     windowStage.getMainWindow((windowError, mainWindow) => {
@@ -119,7 +128,9 @@ export default class EntryAbility extends UIAbility {
       });
       mainWindow.setWindowSystemBarProperties({
         statusBarColor: '#00000000',
-        navigationBarColor: '#00000000'
+        statusBarContentColor: '#FFFFFFFF',
+        navigationBarColor: '#00000000',
+        navigationBarContentColor: '#FFFFFFFF'
       }).catch((barError: Error) => {
         hilog.warn(DOMAIN, TAG, 'Failed to set system bars: %{public}s', JSON.stringify(barError));
       });
@@ -133,11 +144,6 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, TAG, '%{public}s', 'Content loaded');
     });
 
-    try {
-      this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
-    } catch (error) {
-      hilog.error(DOMAIN, TAG, 'Failed to follow system color mode: %{public}s', JSON.stringify(error));
-    }
   }
 
   onConfigurationUpdate(_newConfig: Configuration): void {

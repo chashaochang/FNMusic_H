@@ -1,5 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { avSession } from '@kit.AVSessionKit';
+import { image } from '@kit.ImageKit';
+import { http } from '@kit.NetworkKit';
 import { MusicTrack } from '../model/MusicModels';
 import { PlaybackRepeatMode, PlaybackStatus, PlayerPresentationState } from './PlayerPresentationStore';
 
@@ -19,6 +21,9 @@ export class AvSessionBridge {
   private initializing?: Promise<void>;
   private callbacks?: AvSessionCallbacks;
   private active: boolean = false;
+  private artworkUrl: string = '';
+  private artwork?: image.PixelMap;
+  private artworkEpoch: number = 0;
 
   private readonly playListener = (): void => this.callbacks?.onPlay();
   private readonly pauseListener = (): void => this.callbacks?.onPause();
@@ -52,11 +57,17 @@ export class AvSessionBridge {
     }
   }
 
-  async sync(state: PlayerPresentationState, coverUrl: string = ''): Promise<void> {
+  async sync(state: PlayerPresentationState, expectedAssetId: string = '', coverUrl: string = '',
+    coverHeaders: Record<string, string> = {}): Promise<void> {
     await this.initialize();
     const session: avSession.AVSession | undefined = this.session;
-    const track: MusicTrack | undefined = state.currentTrack();
-    if (session === undefined || track === undefined) {
+    let track: MusicTrack | undefined = state.currentTrack();
+    if (session === undefined || track === undefined || track.guid !== expectedAssetId) {
+      return;
+    }
+    const artwork: image.PixelMap | undefined = await this.resolveArtwork(coverUrl, coverHeaders);
+    track = state.currentTrack();
+    if (track === undefined || track.guid !== expectedAssetId) {
       return;
     }
     const metadata: avSession.AVMetadata = {
@@ -68,8 +79,8 @@ export class AvSessionBridge {
       lyric: state.lyricLines.map((line): string => `[${Math.floor(line.timeMs / 60000)}:${
         `${Math.floor((line.timeMs % 60000) / 1000)}`.padStart(2, '0')}]${line.text}`).join('\n')
     };
-    if (coverUrl.length > 0) {
-      metadata.mediaImage = coverUrl;
+    if (artwork !== undefined) {
+      metadata.mediaImage = artwork;
     }
     const previous: MusicTrack | undefined = state.currentIndex > 0 ? state.queue[state.currentIndex - 1] : undefined;
     const next: MusicTrack | undefined = state.currentIndex + 1 < state.queue.length ?
@@ -169,7 +180,72 @@ export class AvSessionBridge {
     if (this.session === session) {
       this.session = undefined;
     }
+    this.clearArtwork();
     this.active = false;
+  }
+
+  private async resolveArtwork(url: string, headers: Record<string, string>): Promise<image.PixelMap | undefined> {
+    const normalizedUrl: string = url.trim();
+    if (normalizedUrl.length === 0) {
+      return undefined;
+    }
+    if (this.artworkUrl === normalizedUrl && this.artwork !== undefined) {
+      return this.artwork;
+    }
+    const epoch: number = this.artworkEpoch;
+    const loaded: image.PixelMap | undefined = await this.fetchArtwork(normalizedUrl, headers);
+    if (loaded === undefined) {
+      return undefined;
+    }
+    if (epoch !== this.artworkEpoch) {
+      await loaded.release().catch((): void => {});
+      return undefined;
+    }
+    const previous: image.PixelMap | undefined = this.artwork;
+    this.artworkUrl = normalizedUrl;
+    this.artwork = loaded;
+    if (previous !== undefined && previous !== loaded) {
+      await previous.release().catch((): void => {});
+    }
+    return loaded;
+  }
+
+  private async fetchArtwork(url: string, headers: Record<string, string>): Promise<image.PixelMap | undefined> {
+    const client = http.createHttp();
+    let source: image.ImageSource | undefined = undefined;
+    try {
+      const response = await client.request(url, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        header: headers,
+        connectTimeout: 10000,
+        readTimeout: 15000,
+        usingCache: true
+      });
+      if (response.responseCode < 200 || response.responseCode >= 300 || !(response.result instanceof ArrayBuffer) ||
+        response.result.byteLength === 0) {
+        return undefined;
+      }
+      source = image.createImageSource(response.result);
+      return await source.createPixelMap({
+        desiredSize: { width: 512, height: 512 }
+      });
+    } catch (_) {
+      return undefined;
+    } finally {
+      if (source !== undefined) {
+        await source.release().catch((): void => {});
+      }
+      client.destroy();
+    }
+  }
+
+  private clearArtwork(): void {
+    this.artworkEpoch += 1;
+    const artwork: image.PixelMap | undefined = this.artwork;
+    this.artwork = undefined;
+    this.artworkUrl = '';
+    artwork?.release().catch((): void => {});
   }
 
   private async create(): Promise<void> {

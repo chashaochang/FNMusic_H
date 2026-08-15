@@ -6,7 +6,9 @@ export enum FnMusicMaterialRole {
   INTERACTIVE_SURFACE = 'interactive_surface',
   ADAPTIVE_INTERACTIVE = 'adaptive_interactive',
   CHIP = 'chip',
-  CHIP_SELECTED = 'chip_selected'
+  CHIP_SELECTED = 'chip_selected',
+  MUSIC_CHIP_SELECTED = 'music_chip_selected',
+  DETAIL_SEGMENT_SELECTED = 'detail_segment_selected'
 }
 
 /** Shared API 26 immersive materials for native music surfaces. */
@@ -17,6 +19,8 @@ export class FnMusicMaterials {
   private static adaptiveInteractive?: uiMaterial.Material;
   private static chip?: uiMaterial.Material;
   private static chipSelected?: uiMaterial.Material;
+  private static musicChipSelected?: uiMaterial.Material;
+  private static detailSegmentSelected?: uiMaterial.Material;
   private static readonly lightEffect: uiMaterial.LightEffectOptions = { color: Color.White };
 
   static material(role: FnMusicMaterialRole): uiMaterial.Material {
@@ -61,6 +65,32 @@ export class FnMusicMaterials {
         });
       }
       return FnMusicMaterials.chipSelected;
+    }
+    if (role === FnMusicMaterialRole.MUSIC_CHIP_SELECTED) {
+      if (FnMusicMaterials.musicChipSelected === undefined) {
+        FnMusicMaterials.musicChipSelected = new uiMaterial.ImmersiveMaterial({
+          style: uiMaterial.ImmersiveStyle.REGULAR,
+          materialColor: $r('app.color.music_chip_selected_material'),
+          colorInvert: false,
+          applyShadow: false,
+          interactive: true,
+          lightEffect: FnMusicMaterials.lightEffect
+        });
+      }
+      return FnMusicMaterials.musicChipSelected;
+    }
+    if (role === FnMusicMaterialRole.DETAIL_SEGMENT_SELECTED) {
+      if (FnMusicMaterials.detailSegmentSelected === undefined) {
+        FnMusicMaterials.detailSegmentSelected = new uiMaterial.ImmersiveMaterial({
+          style: uiMaterial.ImmersiveStyle.REGULAR,
+          materialColor: $r('app.color.detail_segment_selected_material'),
+          colorInvert: false,
+          applyShadow: false,
+          interactive: true,
+          lightEffect: FnMusicMaterials.lightEffect
+        });
+      }
+      return FnMusicMaterials.detailSegmentSelected;
     }
     if (role === FnMusicMaterialRole.CHIP) {
       if (FnMusicMaterials.chip === undefined) {

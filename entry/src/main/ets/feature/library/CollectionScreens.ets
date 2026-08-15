@@ -2,7 +2,8 @@ import { FnMusicUI } from '../../design/FnMusicUI';
 import { AuthPhase } from '../../auth/ConnectionModels';
 import { AppRuntime, AppRuntimeState } from '../../common/AppRuntime';
 import { MusicAlbum, MusicArtist, MusicGenre } from '../../model/MusicModels';
-import { AlbumRow, ArtistRow, EmptyMusicState, GenreRow, SecondaryPageHeader } from '../common/MusicUiComponents';
+import { EmptyMusicState, SecondaryPageHeader } from '../common/MusicUiComponents';
+import { AlbumCatalogItem, ArtistCatalogItem, GenreGridItem } from './LibraryVisualComponents';
 
 @ComponentV2
 struct CatalogPagingFooter {
@@ -56,6 +57,7 @@ export struct AlbumCollectionScreen {
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
   @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   private hasRuntimeCatalog(): boolean {
     return this.runtimeState.phase === AuthPhase.AUTHENTICATED;
@@ -77,7 +79,7 @@ export struct AlbumCollectionScreen {
         title: '专辑', subtitle: `${this.totalCount()} 张专辑`, safeTop: this.safeTop,
         onBack: (): void => this.onBack()
       })
-      List({ space: FnMusicUI.compactGap }) {
+      List({ space: 0 }) {
         if (this.albums.length === 0) {
           ListItem() {
             EmptyMusicState({ title: '还没有专辑', message: '专辑数据同步后会显示在这里。' })
@@ -86,11 +88,19 @@ export struct AlbumCollectionScreen {
           Repeat<MusicAlbum>(this.albums)
             .each((repeatItem: RepeatItem<MusicAlbum>): void => {
               ListItem() {
-                AlbumRow({ album: repeatItem.item, onOpen: (album: MusicAlbum): void => this.onOpen(album) })
+                Column() {
+                  AlbumCatalogItem({
+                    album: repeatItem.item,
+                    showPlay: true,
+                    onOpen: (album: MusicAlbum): void => this.onOpen(album),
+                    onPlay: (album: MusicAlbum): void => this.onPlay(album)
+                  })
+                  Divider()
+                    .strokeWidth(0.5)
+                    .color($r('app.color.divider'))
+                    .margin({ left: 74 })
+                }
               }
-              .padding({ left: 10, right: 10 })
-              .borderRadius(FnMusicUI.cardRadius)
-              .backgroundColor($r('app.color.surface'))
             })
             .key((item: MusicAlbum): string => item.guid)
             .virtualScroll()
@@ -111,9 +121,10 @@ export struct AlbumCollectionScreen {
       }
       .layoutWeight(1)
       .width('100%')
-      .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+      .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .cachedCount(3)
       .onReachEnd((): void => this.loadMore())
     }
     .width('100%')
@@ -157,7 +168,7 @@ export struct ArtistCollectionScreen {
         title: '歌手', subtitle: `${this.totalCount()} 位歌手`, safeTop: this.safeTop,
         onBack: (): void => this.onBack()
       })
-      List({ space: FnMusicUI.compactGap }) {
+      List({ space: 0 }) {
         if (this.artists.length === 0) {
           ListItem() {
             EmptyMusicState({ title: '还没有歌手', message: '歌手数据同步后会显示在这里。', symbol: $r('sys.symbol.person_fill') })
@@ -166,11 +177,14 @@ export struct ArtistCollectionScreen {
           Repeat<MusicArtist>(this.artists)
             .each((repeatItem: RepeatItem<MusicArtist>): void => {
               ListItem() {
-                ArtistRow({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+                Column() {
+                  ArtistCatalogItem({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+                  Divider()
+                    .strokeWidth(0.5)
+                    .color($r('app.color.divider'))
+                    .margin({ left: 72 })
+                }
               }
-              .padding({ left: 10, right: 10 })
-              .borderRadius(FnMusicUI.cardRadius)
-              .backgroundColor($r('app.color.surface'))
             })
             .key((item: MusicArtist): string => item.guid)
             .virtualScroll()
@@ -191,9 +205,10 @@ export struct ArtistCollectionScreen {
       }
       .layoutWeight(1)
       .width('100%')
-      .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+      .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .cachedCount(3)
       .onReachEnd((): void => this.loadMore())
     }
     .width('100%')
@@ -225,6 +240,15 @@ export struct GenreCollectionScreen {
     return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.genreTotal, this.genres.length) : this.genres.length;
   }
 
+  private rowIndexes(): number[] {
+    const indexes: number[] = [];
+    const rowCount: number = Math.ceil(this.genres.length / 2);
+    for (let index: number = 0; index < rowCount; index++) {
+      indexes.push(index);
+    }
+    return indexes;
+  }
+
   private loadMore(): void {
     if (this.hasRuntimeCatalog()) {
       AppRuntime.loadMoreGenres().catch((): void => {});
@@ -237,23 +261,33 @@ export struct GenreCollectionScreen {
         title: '风格', subtitle: `${this.totalCount()} 种风格`, safeTop: this.safeTop,
         onBack: (): void => this.onBack()
       })
-      List({ space: FnMusicUI.compactGap }) {
+      List({ space: FnMusicUI.albumGridGap }) {
         if (this.genres.length === 0) {
           ListItem() {
             EmptyMusicState({ title: '还没有风格', message: '风格数据同步后会显示在这里。', symbol: $r('sys.symbol.music_badge_wave_2') })
           }
         } else {
-          Repeat<MusicGenre>(this.genres)
-            .each((repeatItem: RepeatItem<MusicGenre>): void => {
+          Repeat<number>(this.rowIndexes())
+            .each((repeatItem: RepeatItem<number>): void => {
               ListItem() {
-                GenreRow({ genre: repeatItem.item, onOpen: (genre: MusicGenre): void => this.onOpen(genre) })
+                Row({ space: FnMusicUI.albumGridGap }) {
+                  GenreGridItem({
+                    genre: this.genres[repeatItem.item * 2],
+                    onOpen: (genre: MusicGenre): void => this.onOpen(genre)
+                  })
+                  if (repeatItem.item * 2 + 1 < this.genres.length) {
+                    GenreGridItem({
+                      genre: this.genres[repeatItem.item * 2 + 1],
+                      onOpen: (genre: MusicGenre): void => this.onOpen(genre)
+                    })
+                  } else {
+                    Blank().width(FnMusicUI.albumGridItemSize)
+                  }
+                }
+                .width('100%')
               }
-              .padding({ left: 10, right: 10 })
-              .borderRadius(FnMusicUI.cardRadius)
-              .backgroundColor($r('app.color.surface'))
             })
-            .key((item: MusicGenre): string => item.guid)
-            .virtualScroll()
+            .key((item: number): string => `${item}`)
         }
         if (this.hasRuntimeCatalog()) {
           ListItem() {
@@ -271,9 +305,10 @@ export struct GenreCollectionScreen {
       }
       .layoutWeight(1)
       .width('100%')
-      .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+      .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .cachedCount(3)
       .onReachEnd((): void => this.loadMore())
     }
     .width('100%')

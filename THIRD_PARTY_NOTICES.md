@@ -3,6 +3,10 @@
 FNMusic_H is an independent, unofficial HarmonyOS client. Feiniu and FNOS are
 trademarks of their respective owners.
 
+Original FNMusic_H source code is licensed under Apache-2.0. Third-party
+components and derivative portions remain subject to their original licenses
+listed below; the project license does not replace those terms.
+
 ## MaFei
 
 - Source: https://github.com/chashaochang/MaFei

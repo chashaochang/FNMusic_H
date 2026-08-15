@@ -10,16 +10,19 @@ import {
   MusicTrack
 } from '../../model/MusicModels';
 import {
-  AlbumRow,
-  ArtistRow,
   EmptyMusicState,
-  GenreRow,
   MusicArtwork,
   MusicChipItem,
   MusicChipStrip,
-  SectionHeader,
-  TrackRow
+  RoamPulseIcon,
+  SectionHeader
 } from '../common/MusicUiComponents';
+import {
+  AlbumCatalogItem,
+  ArtistCatalogItem,
+  DenseTrackRow,
+  GenreGridItem
+} from '../library/LibraryVisualComponents';
 
 export interface HomeFeatureCardData {
   id: string;
@@ -68,8 +71,7 @@ struct HomeStickyChipHeader {
       }
     }
     .width('100%')
-    .height(this.state.pinned ? this.stickyTopInset + FnMusicUI.homeActionBarHeight :
-      FnMusicUI.chipHeight + FnMusicUI.contentGap)
+    .height((this.state.pinned ? this.stickyTopInset : 0) + FnMusicUI.chipHeight + FnMusicUI.contentGap)
     .padding({
       left: FnMusicUI.pagePadding,
       right: FnMusicUI.pagePadding,
@@ -77,6 +79,7 @@ struct HomeStickyChipHeader {
     })
     .alignItems(VerticalAlign.Center)
     .backgroundColor(Color.Transparent)
+    .zIndex(this.state.pinned ? 100 : 0)
     .hitTestBehavior(HitTestMode.Transparent)
     .onAreaChange((_: Area, area: Area): void => {
       this.onPositionChange(area.globalPosition.y as number);
@@ -99,9 +102,6 @@ struct HomeSearchEntry {
         .fontSize(FnMusicUI.bodySize)
         .fontColor($r('app.color.text_secondary'))
         .maxLines(1)
-      SymbolGlyph($r('sys.symbol.arrow_right'))
-        .fontSize(17)
-        .fontColor([$r('app.color.text_secondary')])
     }
     .width('100%')
     .height(FnMusicUI.searchHeight)
@@ -386,10 +386,7 @@ struct HomeFeatureCard {
 
       Row({ space: 6 }) {
         if (this.data.id === 'roam') {
-          Image($r('app.media.home_roam_signal'))
-            .width(21)
-            .height(21)
-            .objectFit(ImageFit.Contain)
+          RoamPulseIcon({ iconSize: 21, lightContent: true })
         }
         Text(this.data.title)
           .fontSize(FnMusicUI.bodySize)
@@ -428,62 +425,6 @@ struct HomeFeatureCard {
 }
 
 @ComponentV2
-struct HomeTrackPreview {
-  @Param tracks: MusicTrack[] = [];
-  @Param title: string = '最近加入';
-  @Param supporting: string = '按添加时间排序';
-  @Param framed: boolean = true;
-  @Param showAllAction: boolean = true;
-  @Event onPlayTrack: (tracks: MusicTrack[], index: number) => void = (_: MusicTrack[], __: number): void => {};
-  @Event onMore: (track: MusicTrack) => void = (_: MusicTrack): void => {};
-  @Event onOpenAll: () => void = (): void => {};
-
-  build() {
-    Column({ space: this.framed ? 4 : FnMusicUI.contentGap }) {
-      SectionHeader({
-        title: this.title,
-        supporting: this.supporting,
-        actionTitle: this.showAllAction ? '全部' : '',
-        onAction: (): void => {
-          this.onOpenAll();
-        }
-      })
-      if (this.tracks.length === 0) {
-        EmptyMusicState({
-          title: '还没有歌曲',
-          message: '服务器音乐库中的歌曲会显示在这里。',
-          symbol: $r('sys.symbol.music_note_list')
-        })
-      } else {
-        Column({ space: this.framed ? 0 : FnMusicUI.homeTrackRowGap }) {
-          Repeat<MusicTrack>(this.tracks.slice(0, 6))
-            .each((repeatItem: RepeatItem<MusicTrack>): void => {
-              TrackRow({
-                track: repeatItem.item,
-                index: repeatItem.index,
-                onPlay: (index: number): void => {
-                  this.onPlayTrack(this.tracks, index);
-                },
-                onMore: (track: MusicTrack): void => {
-                  this.onMore(track);
-                }
-              })
-            })
-            .key((item: MusicTrack): string => item.guid)
-        }
-        .width('100%')
-        .padding(this.framed ? { left: 10, right: 8, top: 2, bottom: 2 } :
-          { left: 0, right: 0, top: 0, bottom: 0 })
-        .borderRadius(this.framed ? FnMusicUI.cardRadius : 0)
-        .backgroundColor(this.framed ? $r('app.color.surface') : Color.Transparent)
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
-@ComponentV2
 struct HomeRecentAlbumTile {
   @Param album: MusicAlbum = new MusicAlbum();
   @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
@@ -497,7 +438,7 @@ struct HomeRecentAlbumTile {
           radius: FnMusicUI.controlRadius,
           coverId: this.album.coverId,
           updatedAt: this.album.createdAt,
-          placeholderMedia: $r('app.media.home_album_placeholder')
+          placeholderMedia: $r('app.media.music_album_placeholder')
         })
         Button({ type: ButtonType.Circle, stateEffect: true }) {
           Image($r('app.media.home_card_play'))
@@ -544,12 +485,15 @@ struct HomeRecentAlbumPreview {
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   build() {
-    Column({ space: FnMusicUI.contentGap }) {
+    Column({ space: FnMusicUI.homeTitleToContentGap }) {
       SectionHeader({ title: '最近添加专辑' })
+        .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
       if (this.albums.length === 0) {
         EmptyMusicState({ title: '还没有专辑', message: '最近添加的专辑会显示在这里。' })
+          .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
       } else {
-        List({ space: FnMusicUI.contentGap }) {
+        List({ space: FnMusicUI.homeRecentAlbumGap }) {
+          ListItem().width(Math.max(0, FnMusicUI.pagePadding - FnMusicUI.homeRecentAlbumGap))
           Repeat<MusicAlbum>(this.albums.slice(0, 10))
             .each((repeatItem: RepeatItem<MusicAlbum>): void => {
               ListItem() {
@@ -561,6 +505,7 @@ struct HomeRecentAlbumPreview {
               }
             })
             .key((item: MusicAlbum): string => item.guid)
+          ListItem().width(Math.max(0, FnMusicUI.pagePadding - FnMusicUI.homeRecentAlbumGap))
         }
         .listDirection(Axis.Horizontal)
         .scrollBar(BarState.Off)
@@ -575,124 +520,46 @@ struct HomeRecentAlbumPreview {
 }
 
 @ComponentV2
-struct HomeAlbumPreview {
-  @Param albums: MusicAlbum[] = [];
-  @Param title: string = '专辑';
-  @Param supporting: string = '';
-  @Param maxItems: number = 6;
-  @Param showAllAction: boolean = false;
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
-  @Event onOpenAll: () => void = (): void => {};
+struct HomeCatalogPagingFooter {
+  @Param loaded: number = 0;
+  @Param total: number = 0;
+  @Param hasMore: boolean = false;
+  @Param loading: boolean = false;
+  @Param errorMessage: string = '';
+  @Event onRetry: () => void = (): void => {};
 
   build() {
-    Column({ space: 4 }) {
-      SectionHeader({
-        title: this.title,
-        supporting: this.supporting.length > 0 ? this.supporting : `${this.albums.length} 张专辑`,
-        actionTitle: this.showAllAction ? '全部' : '',
-        onAction: (): void => this.onOpenAll()
-      })
-      if (this.albums.length === 0) {
-        EmptyMusicState({ title: '还没有专辑', message: '专辑数据同步后会显示在这里。' })
-      } else {
-        Column() {
-          Repeat<MusicAlbum>(this.albums.slice(0, this.maxItems))
-            .each((repeatItem: RepeatItem<MusicAlbum>): void => {
-              AlbumRow({
-                album: repeatItem.item,
-                onOpen: (album: MusicAlbum): void => {
-                  this.onOpen(album);
-                }
-              })
-            })
-            .key((item: MusicAlbum): string => item.guid)
-        }
-        .width('100%')
-        .padding({ left: 10, right: 10 })
-        .borderRadius(FnMusicUI.cardRadius)
-        .backgroundColor($r('app.color.surface'))
+    Column({ space: FnMusicUI.compactGap }) {
+      if (this.loading) {
+        LoadingProgress()
+          .width(24)
+          .height(24)
+          .color($r('app.color.accent'))
+        Text('正在加载更多')
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+      } else if (this.errorMessage.length > 0) {
+        Text(this.errorMessage)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(2)
+          .textAlign(TextAlign.Center)
+        Button('重试加载')
+          .height(36)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.accent'))
+          .backgroundColor($r('app.color.surface_secondary'))
+          .borderRadius(FnMusicUI.controlRadius)
+          .onClick((): void => this.onRetry())
+      } else if (this.hasMore) {
+        Text(this.total > 0 ? `已加载 ${this.loaded} / 共 ${this.total}` : `已加载 ${this.loaded}`)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
       }
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
-@ComponentV2
-struct HomeArtistPreview {
-  @Param artists: MusicArtist[] = [];
-  @Param supporting: string = '';
-  @Param maxItems: number = 6;
-  @Event onOpen: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
-
-  build() {
-    Column({ space: 4 }) {
-      SectionHeader({
-        title: '歌手',
-        supporting: this.supporting.length > 0 ? this.supporting : `${this.artists.length} 位歌手`
-      })
-      if (this.artists.length === 0) {
-        EmptyMusicState({ title: '还没有歌手', message: '歌手数据同步后会显示在这里。', symbol: $r('sys.symbol.person_fill') })
-      } else {
-        Column() {
-          Repeat<MusicArtist>(this.artists.slice(0, this.maxItems))
-            .each((repeatItem: RepeatItem<MusicArtist>): void => {
-              ArtistRow({
-                artist: repeatItem.item,
-                onOpen: (artist: MusicArtist): void => {
-                  this.onOpen(artist);
-                }
-              })
-            })
-            .key((item: MusicArtist): string => item.guid)
-        }
-        .width('100%')
-        .padding({ left: 10, right: 10 })
-        .borderRadius(FnMusicUI.cardRadius)
-        .backgroundColor($r('app.color.surface'))
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
-  }
-}
-
-@ComponentV2
-struct HomeGenrePreview {
-  @Param genres: MusicGenre[] = [];
-  @Param supporting: string = '';
-  @Param maxItems: number = 6;
-  @Event onOpen: (genre: MusicGenre) => void = (_: MusicGenre): void => {};
-
-  build() {
-    Column({ space: 4 }) {
-      SectionHeader({
-        title: '风格',
-        supporting: this.supporting.length > 0 ? this.supporting : `${this.genres.length} 种风格`
-      })
-      if (this.genres.length === 0) {
-        EmptyMusicState({ title: '还没有风格', message: '风格数据同步后会显示在这里。', symbol: $r('sys.symbol.music_badge_wave_2') })
-      } else {
-        Column() {
-          Repeat<MusicGenre>(this.genres.slice(0, this.maxItems))
-            .each((repeatItem: RepeatItem<MusicGenre>): void => {
-              GenreRow({
-                genre: repeatItem.item,
-                onOpen: (genre: MusicGenre): void => {
-                  this.onOpen(genre);
-                }
-              })
-            })
-            .key((item: MusicGenre): string => item.guid)
-        }
-        .width('100%')
-        .padding({ left: 10, right: 10 })
-        .borderRadius(FnMusicUI.cardRadius)
-        .backgroundColor($r('app.color.surface'))
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
+    .height(this.errorMessage.length > 0 ? 92 : (this.loading || this.hasMore ? 60 : 0))
+    .justifyContent(FlexAlign.Center)
   }
 }
 
@@ -730,11 +597,11 @@ export struct HomeScreen {
   ];
 
   private readonly sections: MusicChipItem[] = [
-    { id: LibrarySection.RECENTLY_ADDED, title: '最近添加' },
-    { id: LibrarySection.ALBUMS, title: '专辑' },
-    { id: LibrarySection.ARTISTS, title: '歌手' },
-    { id: LibrarySection.GENRES, title: '风格' },
-    { id: LibrarySection.LIBRARY, title: '音乐库' }
+    { id: LibrarySection.RECENTLY_ADDED, title: '最近添加', icon: $r('app.media.home_chip_recent') },
+    { id: LibrarySection.ALBUMS, title: '专辑', icon: $r('app.media.home_chip_album') },
+    { id: LibrarySection.ARTISTS, title: '歌手', icon: $r('app.media.home_chip_artist') },
+    { id: LibrarySection.GENRES, title: '风格', icon: $r('app.media.home_chip_genre') },
+    { id: LibrarySection.LIBRARY, title: '音乐库', icon: $r('app.media.home_chip_library') }
   ];
 
   private hasRuntimeCatalog(): boolean {
@@ -757,20 +624,100 @@ export struct HomeScreen {
       right.createdAt - left.createdAt).slice(0, 10);
   }
 
+  private albumItems(): MusicAlbum[] {
+    return this.hasRuntimeCatalog() ? this.runtimeState.albums : this.albums;
+  }
+
+  private artistItems(): MusicArtist[] {
+    return this.hasRuntimeCatalog() ? this.runtimeState.artists : this.artists;
+  }
+
+  private genreItems(): MusicGenre[] {
+    return this.hasRuntimeCatalog() ? this.runtimeState.genres : this.genres;
+  }
+
+  private trackItems(): MusicTrack[] {
+    return this.hasRuntimeCatalog() ? this.runtimeState.tracks : this.tracks;
+  }
+
+  private genreRowIndexes(): number[] {
+    const indexes: number[] = [];
+    const rowCount = Math.ceil(this.genreItems().length / 2);
+    for (let index: number = 0; index < rowCount; index++) {
+      indexes.push(index);
+    }
+    return indexes;
+  }
+
   private albumCount(): number {
-    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.albumTotal, this.albums.length) : this.albums.length;
+    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.albumTotal, this.albumItems().length) : this.albums.length;
   }
 
   private artistCount(): number {
-    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.artistTotal, this.artists.length) : this.artists.length;
+    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.artistTotal, this.artistItems().length) : this.artists.length;
   }
 
   private genreCount(): number {
-    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.genreTotal, this.genres.length) : this.genres.length;
+    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.genreTotal, this.genreItems().length) : this.genres.length;
   }
 
   private trackCount(): number {
-    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.trackTotal, this.tracks.length) : this.tracks.length;
+    return this.hasRuntimeCatalog() ? Math.max(this.runtimeState.trackTotal, this.trackItems().length) : this.tracks.length;
+  }
+
+  private loadMoreSelectedSection(): void {
+    if (!this.hasRuntimeCatalog()) {
+      return;
+    }
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) {
+      AppRuntime.loadMoreAlbums().catch((): void => {});
+    } else if (this.sectionState.selectedId === LibrarySection.ARTISTS) {
+      AppRuntime.loadMoreArtists().catch((): void => {});
+    } else if (this.sectionState.selectedId === LibrarySection.GENRES) {
+      AppRuntime.loadMoreGenres().catch((): void => {});
+    } else if (this.sectionState.selectedId === LibrarySection.LIBRARY) {
+      AppRuntime.loadMoreTracks().catch((): void => {});
+    }
+  }
+
+  private activeLoadedCount(): number {
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) return this.albumItems().length;
+    if (this.sectionState.selectedId === LibrarySection.ARTISTS) return this.artistItems().length;
+    if (this.sectionState.selectedId === LibrarySection.GENRES) return this.genreItems().length;
+    if (this.sectionState.selectedId === LibrarySection.LIBRARY) return this.trackItems().length;
+    return 0;
+  }
+
+  private activeTotalCount(): number {
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) return this.albumCount();
+    if (this.sectionState.selectedId === LibrarySection.ARTISTS) return this.artistCount();
+    if (this.sectionState.selectedId === LibrarySection.GENRES) return this.genreCount();
+    if (this.sectionState.selectedId === LibrarySection.LIBRARY) return this.trackCount();
+    return 0;
+  }
+
+  private activeHasMore(): boolean {
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) return this.runtimeState.albumsHasMore;
+    if (this.sectionState.selectedId === LibrarySection.ARTISTS) return this.runtimeState.artistsHasMore;
+    if (this.sectionState.selectedId === LibrarySection.GENRES) return this.runtimeState.genresHasMore;
+    if (this.sectionState.selectedId === LibrarySection.LIBRARY) return this.runtimeState.tracksHasMore;
+    return false;
+  }
+
+  private activeLoadingMore(): boolean {
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) return this.runtimeState.albumsLoadingMore;
+    if (this.sectionState.selectedId === LibrarySection.ARTISTS) return this.runtimeState.artistsLoadingMore;
+    if (this.sectionState.selectedId === LibrarySection.GENRES) return this.runtimeState.genresLoadingMore;
+    if (this.sectionState.selectedId === LibrarySection.LIBRARY) return this.runtimeState.tracksLoadingMore;
+    return false;
+  }
+
+  private activeLoadMoreError(): string {
+    if (this.sectionState.selectedId === LibrarySection.ALBUMS) return this.runtimeState.albumsLoadMoreError;
+    if (this.sectionState.selectedId === LibrarySection.ARTISTS) return this.runtimeState.artistsLoadMoreError;
+    if (this.sectionState.selectedId === LibrarySection.GENRES) return this.runtimeState.genresLoadMoreError;
+    if (this.sectionState.selectedId === LibrarySection.LIBRARY) return this.runtimeState.tracksLoadMoreError;
+    return '';
   }
 
   private updatePinnedState(pinned: boolean): void {
@@ -782,8 +729,10 @@ export struct HomeScreen {
   }
 
   private updateStickyHeaderPosition(globalY: number): void {
-    const titleBarBottom = Math.max(0, this.stickyTopInset) + FnMusicUI.homeActionBarHeight;
-    this.updatePinnedState(globalY <= titleBarBottom + 1);
+    // Hiding the navigation title bar changes the content origin from safeTop to 0.
+    // Switch only when the chip reaches the equivalent top edge in the active coordinate space.
+    const pinThreshold = this.sectionState.pinned ? 1 : Math.max(0, this.stickyTopInset) + 1;
+    this.updatePinnedState(globalY <= pinThreshold);
   }
 
   private updateSearchPosition(globalY: number, height: number): void {
@@ -798,7 +747,9 @@ export struct HomeScreen {
 
   private selectSection(id: string): void {
     this.sectionState.selectedId = id;
-    this.pageScroller.scrollToIndex(3, true, ScrollAlign.START);
+    setTimeout((): void => {
+      this.pageScroller.scrollToIndex(3, false, ScrollAlign.START);
+    }, 0);
   }
 
   @Builder
@@ -871,102 +822,214 @@ export struct HomeScreen {
       }
 
       ListItemGroup({ header: this.stickyChipHeader }) {
-        ListItem() {
-          if (this.sectionState.selectedId === LibrarySection.RECENTLY_ADDED) {
-            Column({ space: FnMusicUI.homeRecentSectionGap }) {
-              HomeRecentAlbumPreview({
-                albums: this.recentAlbumItems(),
-                onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
-                onPlay: (album: MusicAlbum): void => this.onPlayAlbum(album)
-              })
-              HomeTrackPreview({
-                tracks: this.recentTrackItems(),
-                title: '最近添加歌曲',
-                supporting: '',
-                framed: false,
-                showAllAction: false,
-                onPlayTrack: (tracks: MusicTrack[], index: number): void => {
-                  this.onPlayTracks(tracks, index);
-                },
-                onMore: (track: MusicTrack): void => {
-                  this.onTrackMore(track);
-                },
-                onOpenAll: (): void => {
-                  this.onOpenCollection('recently_added', '最近添加');
-                }
-              })
-            }
-          } else if (this.sectionState.selectedId === LibrarySection.ALBUMS) {
-            Column({ space: 10 }) {
-              HomeAlbumPreview({
-                albums: this.albums,
-                supporting: `${this.albumCount()} 张专辑`,
-                onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
-                onOpenAll: (): void => this.onOpenSection(LibrarySection.ALBUMS)
-              })
-              Button('查看全部专辑')
-                .width('100%')
-                .height(FnMusicUI.actionHeight)
-                .fontSize(FnMusicUI.bodySize)
-                .fontColor($r('app.color.accent'))
-                .backgroundColor($r('app.color.surface_secondary'))
-                .borderRadius(FnMusicUI.controlRadius)
-                .onClick((): void => this.onOpenSection(LibrarySection.ALBUMS))
-            }
-          } else if (this.sectionState.selectedId === LibrarySection.ARTISTS) {
-            Column({ space: 10 }) {
-              HomeArtistPreview({
-                artists: this.artists,
-                supporting: `${this.artistCount()} 位歌手`,
-                onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
-              })
-              Button('查看全部歌手')
-                .width('100%')
-                .height(FnMusicUI.actionHeight)
-                .fontSize(FnMusicUI.bodySize)
-                .fontColor($r('app.color.accent'))
-                .backgroundColor($r('app.color.surface_secondary'))
-                .borderRadius(FnMusicUI.controlRadius)
-                .onClick((): void => this.onOpenSection(LibrarySection.ARTISTS))
-            }
-          } else if (this.sectionState.selectedId === LibrarySection.GENRES) {
-            Column({ space: 10 }) {
-              HomeGenrePreview({
-                genres: this.genres,
-                supporting: `${this.genreCount()} 种风格`,
-                onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
-              })
-              Button('查看全部风格')
-                .width('100%')
-                .height(FnMusicUI.actionHeight)
-                .fontSize(FnMusicUI.bodySize)
-                .fontColor($r('app.color.accent'))
-                .backgroundColor($r('app.color.surface_secondary'))
-                .borderRadius(FnMusicUI.controlRadius)
-                .onClick((): void => this.onOpenSection(LibrarySection.GENRES))
-            }
-          } else {
-            HomeTrackPreview({
-              tracks: this.tracks,
-              title: '音乐库',
-              supporting: `${this.trackCount()} 首歌曲`,
-              onPlayTrack: (tracks: MusicTrack[], index: number): void => {
-                this.onPlayTracks(tracks, index);
-              },
-              onMore: (track: MusicTrack): void => {
-                this.onTrackMore(track);
-              },
-              onOpenAll: (): void => {
-                this.onOpenCollection('library', '音乐库');
-              }
+        if (this.sectionState.selectedId === LibrarySection.RECENTLY_ADDED) {
+          ListItem() {
+            HomeRecentAlbumPreview({
+              albums: this.recentAlbumItems(),
+              onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
+              onPlay: (album: MusicAlbum): void => this.onPlayAlbum(album)
             })
           }
+          .padding({ top: FnMusicUI.homeChipToContentGap })
+
+          ListItem() {
+            SectionHeader({ title: '最近添加歌曲' })
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.homeRecentSectionGap - FnMusicUI.contentGap,
+            bottom: FnMusicUI.homeTitleToContentGap
+          })
+
+          if (this.recentTrackItems().length === 0) {
+            ListItem() {
+              EmptyMusicState({ title: '还没有歌曲', message: '最近添加的歌曲会显示在这里。' })
+            }
+            .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+          } else {
+            Repeat<MusicTrack>(this.recentTrackItems())
+              .each((repeatItem: RepeatItem<MusicTrack>): void => {
+                ListItem() {
+                  DenseTrackRow({
+                    track: repeatItem.item,
+                    index: repeatItem.index,
+                    onPlay: (index: number): void => this.onPlayTracks(this.recentTrackItems(), index),
+                    onMore: (track: MusicTrack): void => this.onTrackMore(track)
+                  })
+                }
+                .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+              })
+              .key((item: MusicTrack): string => item.guid)
+          }
+        } else if (this.sectionState.selectedId === LibrarySection.ALBUMS) {
+          ListItem() {
+            SectionHeader({ title: '专辑', supporting: `共 ${this.albumCount()} 张专辑` })
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.homeChipToContentGap,
+            bottom: FnMusicUI.homeTitleToContentGap
+          })
+
+          if (this.albumItems().length === 0) {
+            ListItem() {
+              EmptyMusicState({ title: '还没有专辑', message: '专辑数据同步后会显示在这里。' })
+            }
+            .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+          } else {
+            Repeat<MusicAlbum>(this.albumItems())
+              .each((repeatItem: RepeatItem<MusicAlbum>): void => {
+                ListItem() {
+                  Column() {
+                    AlbumCatalogItem({
+                      album: repeatItem.item,
+                      showPlay: true,
+                      onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
+                      onPlay: (album: MusicAlbum): void => this.onPlayAlbum(album)
+                    })
+                    Divider()
+                      .strokeWidth(0.5)
+                      .color($r('app.color.divider'))
+                      .margin({ left: 74 })
+                  }
+                }
+                .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+              })
+              .key((item: MusicAlbum): string => item.guid)
+              .virtualScroll()
+          }
+        } else if (this.sectionState.selectedId === LibrarySection.ARTISTS) {
+          ListItem() {
+            SectionHeader({ title: '歌手', supporting: `共 ${this.artistCount()} 位歌手` })
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.homeChipToContentGap,
+            bottom: FnMusicUI.homeTitleToContentGap
+          })
+
+          if (this.artistItems().length === 0) {
+            ListItem() {
+              EmptyMusicState({ title: '还没有歌手', message: '歌手数据同步后会显示在这里。' })
+            }
+            .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+          } else {
+            Repeat<MusicArtist>(this.artistItems())
+              .each((repeatItem: RepeatItem<MusicArtist>): void => {
+                ListItem() {
+                  Column() {
+                    ArtistCatalogItem({
+                      artist: repeatItem.item,
+                      onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
+                    })
+                    Divider()
+                      .strokeWidth(0.5)
+                      .color($r('app.color.divider'))
+                      .margin({ left: 72 })
+                  }
+                }
+                .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+              })
+              .key((item: MusicArtist): string => item.guid)
+              .virtualScroll()
+          }
+        } else if (this.sectionState.selectedId === LibrarySection.GENRES) {
+          ListItem() {
+            SectionHeader({ title: '风格', supporting: `共 ${this.genreCount()} 种风格` })
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.homeChipToContentGap,
+            bottom: FnMusicUI.homeTitleToContentGap
+          })
+
+          if (this.genreItems().length === 0) {
+            ListItem() {
+              EmptyMusicState({ title: '还没有风格', message: '风格数据同步后会显示在这里。' })
+            }
+            .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+          } else {
+            Repeat<number>(this.genreRowIndexes())
+              .each((repeatItem: RepeatItem<number>): void => {
+                ListItem() {
+                  Row({ space: FnMusicUI.albumGridGap }) {
+                    GenreGridItem({
+                      genre: this.genreItems()[repeatItem.item * 2],
+                      itemWidth: FnMusicUI.homeCatalogGridItemSize,
+                      onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
+                    })
+                    if (repeatItem.item * 2 + 1 < this.genreItems().length) {
+                      GenreGridItem({
+                        genre: this.genreItems()[repeatItem.item * 2 + 1],
+                        itemWidth: FnMusicUI.homeCatalogGridItemSize,
+                        onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
+                      })
+                    } else {
+                      Blank().width(FnMusicUI.homeCatalogGridItemSize)
+                    }
+                  }
+                  .width('100%')
+                }
+                .padding({
+                  left: FnMusicUI.pagePadding,
+                  right: FnMusicUI.pagePadding,
+                  bottom: FnMusicUI.albumGridGap
+                })
+              })
+              .key((item: number): string => `${item}`)
+          }
+        } else {
+          ListItem() {
+            SectionHeader({ title: '音乐库', supporting: `共 ${this.trackCount()} 首歌曲` })
+          }
+          .padding({
+            left: FnMusicUI.pagePadding,
+            right: FnMusicUI.pagePadding,
+            top: FnMusicUI.homeChipToContentGap,
+            bottom: FnMusicUI.homeTitleToContentGap
+          })
+
+          if (this.trackItems().length === 0) {
+            ListItem() {
+              EmptyMusicState({ title: '音乐库为空', message: '服务器音乐库中的歌曲会显示在这里。' })
+            }
+            .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+          } else {
+            Repeat<MusicTrack>(this.trackItems())
+              .each((repeatItem: RepeatItem<MusicTrack>): void => {
+                ListItem() {
+                  DenseTrackRow({
+                    track: repeatItem.item,
+                    index: repeatItem.index,
+                    showFormat: true,
+                    onPlay: (index: number): void => this.onPlayTracks(this.trackItems(), index),
+                    onMore: (track: MusicTrack): void => this.onTrackMore(track)
+                  })
+                }
+                .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+              })
+              .key((item: MusicTrack): string => item.guid)
+              .virtualScroll()
+          }
         }
-        .padding({
-          left: FnMusicUI.pagePadding,
-          right: FnMusicUI.pagePadding,
-          top: FnMusicUI.homeChipToContentGap
-        })
+
+        if (this.sectionState.selectedId !== LibrarySection.RECENTLY_ADDED && this.hasRuntimeCatalog()) {
+          ListItem() {
+            HomeCatalogPagingFooter({
+              loaded: this.activeLoadedCount(),
+              total: this.activeTotalCount(),
+              hasMore: this.activeHasMore(),
+              loading: this.activeLoadingMore(),
+              errorMessage: this.activeLoadMoreError(),
+              onRetry: (): void => this.loadMoreSelectedSection()
+            })
+          }
+          .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
+        }
       }
       ListItem().height(this.bottomInset + FnMusicUI.sectionGap + FnMusicUI.homeStickyRunway)
     }
@@ -986,5 +1049,6 @@ export struct HomeScreen {
       const offset = Math.max(0, this.pageScroller.currentOffset().yOffset);
       this.onChromeProgress(Math.min(1, offset / 96));
     })
+    .onReachEnd((): void => this.loadMoreSelectedSection())
   }
 }

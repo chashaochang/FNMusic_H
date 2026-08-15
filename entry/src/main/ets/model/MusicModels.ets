@@ -177,6 +177,7 @@ export interface MusicAlbumWire {
   name?: string;
   coverId?: string;
   releaseDate?: NumericWireValue;
+  artists?: MusicArtistWire[];
   trackCount?: NumericWireValue;
   createdAt?: NumericWireValue;
 }
@@ -318,6 +319,32 @@ export function wireNumber(value: NumericWireValue | undefined, fallback: number
   return fallback;
 }
 
+export function wireYear(value: NumericWireValue | undefined): number {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (normalized.length === 4 || (normalized.length > 4 &&
+      (normalized.charAt(4) === '-' || normalized.charAt(4) === '/' || normalized.charAt(4) === '.'))) {
+      const dateYear = Number(normalized.substring(0, 4));
+      if (Number.isInteger(dateYear) && dateYear >= 1000 && dateYear <= 9999) {
+        return dateYear;
+      }
+    }
+  }
+
+  const numericValue = wireNumber(value);
+  if (numericValue >= 1000 && numericValue <= 9999) {
+    return numericValue;
+  }
+  if (numericValue >= 1000000000) {
+    const timestampMs = numericValue < 100000000000 ? numericValue * 1000 : numericValue;
+    const timestampYear = new Date(timestampMs).getFullYear();
+    if (Number.isInteger(timestampYear) && timestampYear >= 1000 && timestampYear <= 9999) {
+      return timestampYear;
+    }
+  }
+  return 0;
+}
+
 export function wireBoolean(value: BooleanWireValue | undefined): boolean {
   if (typeof value === 'boolean') {
     return value;
@@ -349,8 +376,20 @@ export function musicArtistFromWire(data: MusicArtistWire): MusicArtist {
 }
 
 export function musicAlbumFromWire(data: MusicAlbumWire): MusicAlbum {
-  const releaseDate = wireNumber(data.releaseDate);
-  const value = new MusicAlbum(data.guid ?? '', data.name ?? '未知专辑', data.coverId ?? '', releaseDate, '');
+  const artistNames: string[] = [];
+  (data.artists ?? []).forEach((artist: MusicArtistWire): void => {
+    const name = (artist.name ?? '').trim();
+    if (name.length > 0) {
+      artistNames.push(name);
+    }
+  });
+  const value = new MusicAlbum(
+    data.guid ?? '',
+    data.name ?? '未知专辑',
+    data.coverId ?? '',
+    wireYear(data.releaseDate),
+    artistNames.join(' / ')
+  );
   value.trackCount = wireNumber(data.trackCount);
   value.createdAt = wireNumber(data.createdAt);
   return value;

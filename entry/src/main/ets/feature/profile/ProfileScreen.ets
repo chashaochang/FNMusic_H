@@ -1,6 +1,7 @@
 import { FnMusicUI } from '../../design/FnMusicUI';
 import { MusicPlaylist, MusicUser } from '../../model/MusicModels';
-import { EmptyMusicState, MusicArtwork, PlaylistRow, SectionHeader, SettingsRow } from '../common/MusicUiComponents';
+import { MusicArtwork, SettingsRow } from '../common/MusicUiComponents';
+import { PlaylistCollectionSection } from '../playlist/PlaylistScreen';
 
 @ComponentV2
 struct ProfileIdentityCard {
@@ -74,41 +75,12 @@ export struct ProfileScreen {
       Column({ space: FnMusicUI.sectionGap }) {
         ProfileIdentityCard({ user: this.user })
 
-        Column({ space: 6 }) {
-          SectionHeader({
-            title: '自建歌单',
-            supporting: `${this.playlists.length} 个歌单`,
-            actionTitle: '新建',
-            onAction: (): void => {
-              this.onCreatePlaylist();
-            }
-          })
-          if (this.playlists.length === 0) {
-            EmptyMusicState({
-              title: '还没有自建歌单',
-              message: '点击「新建」创建第一个歌单。',
-              symbol: $r('sys.symbol.music_note_list')
-            })
-          } else {
-            Column() {
-              Repeat<MusicPlaylist>(this.playlists)
-                .each((repeatItem: RepeatItem<MusicPlaylist>): void => {
-                  PlaylistRow({
-                    playlist: repeatItem.item,
-                    onOpen: (playlist: MusicPlaylist): void => this.onOpenPlaylist(playlist),
-                    onMore: (playlist: MusicPlaylist): void => this.onPlaylistMore(playlist)
-                  })
-                })
-                .key((item: MusicPlaylist): string => item.guid)
-            }
-            .width('100%')
-            .padding({ left: 10, right: 8 })
-            .borderRadius(FnMusicUI.cardRadius)
-            .backgroundColor($r('app.color.surface'))
-          }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        PlaylistCollectionSection({
+          playlists: this.playlists,
+          onOpenPlaylist: (playlist: MusicPlaylist): void => this.onOpenPlaylist(playlist),
+          onPlaylistMore: (playlist: MusicPlaylist): void => this.onPlaylistMore(playlist),
+          onCreatePlaylist: (): void => this.onCreatePlaylist()
+        })
 
         Column() {
           SettingsRow({

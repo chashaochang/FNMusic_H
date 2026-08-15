@@ -1,7 +1,7 @@
 {
   "modelVersion": "26.0.0",
   "description": "Native HarmonyOS client for Feiniu Music.",
-  "license": "AGPL-3.0-only",
+  "license": "Apache-2.0",
   "dependencies": {
     "@hmanimations/ezcustomtransition": "^1.3.0"
   },

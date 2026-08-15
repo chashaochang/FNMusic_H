@@ -64,4 +64,4 @@ entry/build/default/outputs/default/
 
 ## 开源许可
 
-项目代码采用 `AGPL-3.0-only` 许可证。第三方组件仍遵循各自原始许可证，具体信息请查看 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+项目原创代码采用 `Apache-2.0` 许可证。第三方组件及衍生部分仍遵循各自原始许可证，具体信息请查看 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

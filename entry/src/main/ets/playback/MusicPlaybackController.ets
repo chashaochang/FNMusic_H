@@ -198,6 +198,31 @@ export class MusicPlaybackController {
     this.syncSession();
   }
 
+  async removeQueueItem(index: number): Promise<void> {
+    if (index < 0 || index >= this.playbackState.queue.length) {
+      return;
+    }
+    if (this.playbackState.queue.length === 1) {
+      await this.clearQueue();
+      return;
+    }
+
+    const values: MusicTrack[] = this.playbackState.queue.slice();
+    values.splice(index, 1);
+    if (index === this.playbackState.currentIndex) {
+      const nextIndex: number = Math.min(index, values.length - 1);
+      this.playbackState.queue = values;
+      await this.playAt(nextIndex);
+      return;
+    }
+
+    if (index < this.playbackState.currentIndex) {
+      this.playbackState.currentIndex -= 1;
+    }
+    this.playbackState.queue = values;
+    this.syncSession();
+  }
+
   async toggle(): Promise<void> {
     if (this.playbackState.status === PlaybackStatus.PLAYING ||
       this.playbackState.status === PlaybackStatus.BUFFERING) {
@@ -669,8 +694,11 @@ export class MusicPlaybackController {
     const track: MusicTrack | undefined = this.playbackState.currentTrack();
     const coverUrl: string = track !== undefined && track.coverId.length > 0 && this.api !== undefined ?
       this.api.coverUrl(track.coverId, 512, track.updatedAt) : '';
+    const coverHeaders: Record<string, string> = coverUrl.length > 0 && this.api !== undefined ?
+      this.api.playbackHeaders() : {};
+    const expectedAssetId: string = track?.guid ?? '';
     this.sessionChain = this.sessionChain.then((): Promise<void> =>
-      this.session.sync(this.playbackState, coverUrl)).catch((): void => {});
+      this.session.sync(this.playbackState, expectedAssetId, coverUrl, coverHeaders)).catch((): void => {});
   }
 
   saveSession(): void {

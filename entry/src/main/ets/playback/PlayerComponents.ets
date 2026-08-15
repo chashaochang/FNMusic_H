@@ -2,9 +2,10 @@ import { FnMusicUI } from '../design/FnMusicUI';
 import { FnMusicMaterialRole, FnMusicMaterials } from '../design/FnMusicMaterials';
 import { MusicPreferenceState, MusicPreferenceStore, connectMusicPreferenceState } from '../common/MusicPreferenceStore';
 import { FnToast } from '../common/FnToast';
+import { LengthMetrics } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { MusicAlbum, MusicArtist, MusicPlaylist, MusicTrack, formatDuration } from '../model/MusicModels';
-import { MusicArtwork } from '../feature/common/MusicUiComponents';
+import { MusicArtwork, RoamPulseIcon } from '../feature/common/MusicUiComponents';
 import { MusicPlaybackController } from './MusicPlaybackController';
 import { PlayerDynamicPalette, PlayerPaletteState } from './PlayerDynamicPalette';
 import { nearestLyricIndex, playerFormatLabel, desktopLyricErrorMessage } from './PlayerUiPolicy';
@@ -40,16 +41,18 @@ enum ExpandedPanel {
   QUEUE = 'queue'
 }
 
-const PLAYER_LYRIC_LINE_HEIGHT: number = 36;
+const PLAYER_LYRIC_LINE_HEIGHT: number = 46;
+const PLAYER_LYRIC_FADING_EDGE_LENGTH: number = 80;
 const PLAYER_LYRIC_ACTIVE_TOP_OFFSET: number = 160;
-const PLAYER_LYRIC_CONTENT_BOTTOM_PADDING: number = 360;
+const PLAYER_LYRIC_CONTENT_BOTTOM_PADDING: number = 420;
 const PLAYER_PAGE_SWIPE_DISTANCE: number = 180;
 const PLAYER_PAGE_SWITCH_THRESHOLD: number = 22;
 const PLAYER_IMMERSION_DELAY: number = 5000;
-const PLAYER_INFO_LIFT: number = 32;
+const PLAYER_COVER_LIFT: number = 10;
+const PLAYER_INFO_LIFT: number = 20;
 const PLAYER_LYRIC_SETTINGS_OFFSET: number = 126;
 const PLAYER_LYRIC_RESTORE_HEIGHT: number = 80;
-const PLAYER_LYRIC_IMMERSIVE_BOTTOM_GUTTER: number = 64;
+const PLAYER_LYRIC_IMMERSIVE_BOTTOM_GUTTER: number = 8;
 const PLAYER_LYRIC_PREVIEW_TOP: number = 224;
 const PLAYER_MENU_BOTTOM_OFFSET: number = 56;
 
@@ -57,6 +60,7 @@ const PLAYER_MENU_BOTTOM_OFFSET: number = 56;
 export struct MiniPlayerBar {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
   @Param placement: PlayerHostPlacement = PlayerHostPlacement.HOME;
+  @Param heightOverride: number = 0;
   @Param transitionId: string = HOME_PLAYER_TRANSITION_ID;
   @Event onExpand: () => void = (): void => {};
   @Event onToggle: () => void = (): void => {};
@@ -77,16 +81,35 @@ export struct MiniPlayerBar {
   }
 
   private playerHeight(): number {
+    if (this.heightOverride > 0) {
+      return this.heightOverride;
+    }
     return this.compact() ? FnMusicUI.compactPlayerHeight :
       (this.placement === PlayerHostPlacement.HOME ? FnMusicUI.miniPlayerHeight : FnMusicUI.floatingPlayerHeight);
+  }
+
+  private artworkSize(): number {
+    if (!this.compact()) {
+      return FnMusicUI.miniPlayerArtworkSize;
+    }
+    const heightRange: number = FnMusicUI.compactPlayerHeight - FnMusicUI.homeMiniPlayerHeight;
+    if (heightRange <= 0) {
+      return FnMusicUI.compactPlayerArtworkSize;
+    }
+    const progress: number = Math.max(0, Math.min(1,
+      (this.playerHeight() - FnMusicUI.homeMiniPlayerHeight) / heightRange));
+    return FnMusicUI.miniPlayerArtworkSize +
+      (FnMusicUI.compactPlayerArtworkSize - FnMusicUI.miniPlayerArtworkSize) * progress;
   }
 
   build() {
     Row({ space: 8 }) {
       Row({ space: 8 }) {
           MusicArtwork({
-            artworkSize: 36,
-            radius: 18,
+            artworkSize: this.artworkSize(),
+            radius: this.artworkSize() / 2,
+            placeholderMedia: $r('app.media.music_track_placeholder'),
+            placeholderRatio: 0.56,
             coverId: this.track().coverId,
             updatedAt: this.track().updatedAt
           })
@@ -118,17 +141,17 @@ export struct MiniPlayerBar {
             LoadingProgress()
               .width(20)
               .height(20)
-              .color($r('app.color.text_primary'))
+              .color($r('app.color.mini_player_play_foreground'))
           } else {
             SymbolGlyph(this.playing() ? $r('sys.symbol.pause_fill') : $r('sys.symbol.play_fill'))
               .fontSize(16)
-              .fontColor([Color.Black])
+              .fontColor([$r('app.color.mini_player_play_foreground')])
           }
         }
         .width(32)
         .height(32)
         .buttonStyle(ButtonStyleMode.TEXTUAL)
-        .backgroundColor('rgba(255,255,255,0.90)')
+        .backgroundColor($r('app.color.mini_player_play_background'))
         .accessibilityText(this.playing() ? '暂停' : '播放')
         .onClick((): void => this.onToggle())
 
@@ -146,10 +169,7 @@ export struct MiniPlayerBar {
 
       Button({ type: ButtonType.Circle, stateEffect: !this.state.roamMode }) {
         if (this.state.roamMode) {
-          Image($r('app.media.mini_player_roam'))
-            .width(21)
-            .height(21)
-            .objectFit(ImageFit.Contain)
+          RoamPulseIcon({ iconSize: 21 })
         } else {
           SymbolGlyph($r('sys.symbol.music_note_list'))
             .fontSize(20)
@@ -182,84 +202,239 @@ export struct MiniPlayerBar {
 struct QueuePanel {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
   @Param safeBottom: number = 0;
+  @Local selectedTab: number = 0;
+  @Event onClose: () => void = (): void => {};
   @Event onSelect: (index: number) => void = (_: number): void => {};
+  @Event onRemove: (index: number) => void = (_: number): void => {};
   @Event onClear: () => void = (): void => {};
+  @Event onRepeat: () => void = (): void => {};
+
+  private repeatSymbol(): Resource {
+    return this.state.repeatMode === PlaybackRepeatMode.ONE ?
+      $r('sys.symbol.repeat_1') : $r('sys.symbol.repeat');
+  }
+
+  private repeatLabel(): string {
+    if (this.state.repeatMode === PlaybackRepeatMode.ONE) {
+      return '单曲循环';
+    }
+    if (this.state.repeatMode === PlaybackRepeatMode.LIST) {
+      return '列表循环';
+    }
+    return '顺序播放';
+  }
+
+  private formatLabel(track: MusicTrack): string {
+    const format: string = track.audioSpec.format.trim();
+    return (format.length > 0 ? format : track.audioSpec.codec.trim()).toUpperCase();
+  }
+
+  private trackSubtitle(track: MusicTrack): string {
+    const artist: string = track.artistName.trim();
+    const album: string = track.albumName.trim();
+    if (artist.length > 0 && album.length > 0) {
+      return `${artist} - ${album}`;
+    }
+    return artist.length > 0 ? artist : album;
+  }
 
   build() {
-    Column({ space: FnMusicUI.compactGap }) {
+    Column() {
       Row() {
-        Column({ space: 2 }) {
-          Text('播放队列')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          Text(`${this.state.queue.length} 首歌曲`)
-            .fontSize(FnMusicUI.supportingSize)
+        Text('播放列表')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+        Blank()
+        Button({ type: ButtonType.Circle, stateEffect: true }) {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(20)
+            .fontColor([$r('app.color.text_primary')])
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(Color.Transparent)
+        .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+        .accessibilityText('关闭播放列表')
+        .onClick((): void => this.onClose())
+      }
+      .width('100%')
+      .height(60)
+
+      Row() {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Text(`当前列表 ${this.state.queue.length}`)
+            .fontSize(FnMusicUI.bodySize)
+            .fontWeight(this.selectedTab === 0 ? FontWeight.Medium : FontWeight.Regular)
+            .fontColor(this.selectedTab === 0 ? $r('app.color.text_primary') : $r('app.color.text_secondary'))
+        }
+        .layoutWeight(1)
+        .height(42)
+        .borderRadius(21)
+        .backgroundColor(Color.Transparent)
+        .systemMaterial(FnMusicMaterials.material(this.selectedTab === 0 ?
+          FnMusicMaterialRole.CHIP_SELECTED : FnMusicMaterialRole.CHIP))
+        .onClick((): void => { this.selectedTab = 0; })
+
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Text('历史列表 0')
+            .fontSize(FnMusicUI.bodySize)
+            .fontWeight(this.selectedTab === 1 ? FontWeight.Medium : FontWeight.Regular)
+            .fontColor(this.selectedTab === 1 ? $r('app.color.text_primary') : $r('app.color.text_secondary'))
+        }
+        .layoutWeight(1)
+        .height(42)
+        .borderRadius(21)
+        .backgroundColor(Color.Transparent)
+        .systemMaterial(FnMusicMaterials.material(this.selectedTab === 1 ?
+          FnMusicMaterialRole.CHIP_SELECTED : FnMusicMaterialRole.CHIP))
+        .onClick((): void => { this.selectedTab = 1; })
+      }
+      .width('100%')
+      .height(46)
+      .padding(2)
+      .borderRadius(23)
+      .backgroundColor($r('app.color.surface_secondary'))
+
+      Text('播放来源：飞牛音乐')
+        .width('100%')
+        .fontSize(FnMusicUI.supportingSize)
+        .fontColor($r('app.color.text_secondary'))
+        .padding({ top: 16, bottom: 12 })
+
+      Row() {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Row({ space: 8 }) {
+            SymbolGlyph(this.repeatSymbol())
+              .fontSize(20)
+              .fontColor([$r('app.color.text_primary')])
+            Text(this.repeatLabel())
+              .fontSize(FnMusicUI.bodySize)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
+          }
+        }
+        .height(42)
+        .padding({ left: 0, right: 8 })
+        .backgroundColor(Color.Transparent)
+        .onClick((): void => this.onRepeat())
+
+        Blank()
+
+        Button({ type: ButtonType.Circle, stateEffect: true }) {
+          SymbolGlyph($r('sys.symbol.trash'))
+            .fontSize(20)
+            .fontColor([$r('app.color.text_secondary')])
+        }
+        .width(42)
+        .height(42)
+        .backgroundColor(Color.Transparent)
+        .enabled(this.state.queue.length > 0)
+        .accessibilityText('清空播放列表')
+        .onClick((): void => this.onClear())
+      }
+      .width('100%')
+      .height(50)
+
+      if (this.selectedTab === 0) {
+        List({ space: 0 }) {
+          Repeat<MusicTrack>(this.state.queue)
+            .each((repeatItem: RepeatItem<MusicTrack>): void => {
+              ListItem() {
+                Column() {
+                  Row({ space: 10 }) {
+                    Row({ space: 10 }) {
+                      SymbolGlyph(repeatItem.index === this.state.currentIndex ?
+                        $r('sys.symbol.speaker_wave_2_fill') : $r('sys.symbol.music'))
+                        .width(24)
+                        .fontSize(17)
+                        .fontColor([repeatItem.index === this.state.currentIndex ?
+                          $r('app.color.accent') : $r('app.color.text_secondary')])
+                      Column({ space: 3 }) {
+                        Text(repeatItem.item.title)
+                          .fontSize(FnMusicUI.bodySize)
+                          .fontWeight(repeatItem.index === this.state.currentIndex ? FontWeight.Medium : FontWeight.Regular)
+                          .fontColor(repeatItem.index === this.state.currentIndex ?
+                            $r('app.color.accent') : $r('app.color.text_primary'))
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        Row({ space: 6 }) {
+                          if (this.formatLabel(repeatItem.item).length > 0) {
+                            Text(this.formatLabel(repeatItem.item))
+                              .height(20)
+                              .padding({ left: 5, right: 5 })
+                              .fontSize(10)
+                              .fontColor($r('app.color.text_secondary'))
+                              .borderRadius(5)
+                              .backgroundColor($r('app.color.player_format_background'))
+                          }
+                          Text(this.trackSubtitle(repeatItem.item))
+                            .layoutWeight(1)
+                            .fontSize(FnMusicUI.supportingSize)
+                            .fontColor(repeatItem.index === this.state.currentIndex ?
+                              $r('app.color.accent') : $r('app.color.text_secondary'))
+                            .maxLines(1)
+                            .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        }
+                        .width('100%')
+                      }
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start)
+                    }
+                    .layoutWeight(1)
+                    .height('100%')
+                    .alignItems(VerticalAlign.Center)
+                    .onClick((): void => this.onSelect(repeatItem.index))
+                    Button({ type: ButtonType.Circle, stateEffect: true }) {
+                      SymbolGlyph($r('sys.symbol.xmark'))
+                        .fontSize(19)
+                        .fontColor([$r('app.color.text_secondary')])
+                    }
+                    .width(40)
+                    .height(40)
+                    .backgroundColor(Color.Transparent)
+                    .accessibilityText(`从播放列表移除 ${repeatItem.item.title}`)
+                    .onClick((): void => this.onRemove(repeatItem.index))
+                  }
+                  .width('100%')
+                  .height(58)
+                  .padding({ left: 2, right: 0 })
+
+                  Divider()
+                    .strokeWidth(0.5)
+                    .color($r('app.color.divider'))
+                    .margin({ left: 34 })
+                }
+              }
+            })
+            .key((item: MusicTrack): string => item.guid)
+            .virtualScroll()
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .scrollBar(BarState.Off)
+        .cachedCount(3)
+      } else {
+        Column({ space: 10 }) {
+          SymbolGlyph($r('sys.symbol.clock'))
+            .fontSize(34)
+            .fontColor([$r('app.color.text_secondary')])
+          Text('暂无历史列表')
+            .fontSize(FnMusicUI.bodySize)
             .fontColor($r('app.color.text_secondary'))
         }
-        .alignItems(HorizontalAlign.Start)
-        Blank()
-        Button('清空')
-          .height(36)
-          .fontSize(FnMusicUI.supportingSize)
-          .fontColor($r('app.color.danger'))
-          .backgroundColor($r('app.color.transparent'))
-          .enabled(this.state.queue.length > 0)
-          .onClick((): void => this.onClear())
+        .layoutWeight(1)
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
       }
-      .width('100%')
-
-      List({ space: 4 }) {
-        Repeat<MusicTrack>(this.state.queue)
-          .each((repeatItem: RepeatItem<MusicTrack>): void => {
-            ListItem() {
-              Row({ space: 10 }) {
-                SymbolGlyph(repeatItem.index === this.state.currentIndex ?
-                  $r('sys.symbol.speaker_wave_2_fill') : $r('sys.symbol.music'))
-                  .width(26)
-                  .fontSize(17)
-                  .fontColor([repeatItem.index === this.state.currentIndex ?
-                    $r('app.color.accent') : $r('app.color.text_secondary')])
-                Column({ space: 2 }) {
-                  Text(repeatItem.item.title)
-                    .fontSize(FnMusicUI.bodySize)
-                    .fontWeight(repeatItem.index === this.state.currentIndex ? FontWeight.Medium : FontWeight.Regular)
-                    .fontColor(repeatItem.index === this.state.currentIndex ?
-                      $r('app.color.accent') : $r('app.color.text_primary'))
-                    .maxLines(1)
-                    .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(repeatItem.item.artistName)
-                    .fontSize(FnMusicUI.supportingSize)
-                    .fontColor($r('app.color.text_secondary'))
-                    .maxLines(1)
-                }
-                .layoutWeight(1)
-                .alignItems(HorizontalAlign.Start)
-                Text(formatDuration(repeatItem.item.durationMs))
-                  .fontSize(12)
-                  .fontColor($r('app.color.text_secondary'))
-              }
-              .width('100%')
-              .height(FnMusicUI.listRowHeight)
-              .padding({ left: 8, right: 8 })
-              .borderRadius(FnMusicUI.cardRadius)
-              .backgroundColor(repeatItem.index === this.state.currentIndex ?
-                $r('app.color.accent_soft') : $r('app.color.transparent'))
-              .onClick((): void => this.onSelect(repeatItem.index))
-            }
-          })
-          .key((item: MusicTrack): string => item.guid)
-          .virtualScroll()
-      }
-      .height(300)
-      .width('100%')
-      .scrollBar(BarState.Off)
-      .cachedCount(2)
     }
     .width('100%')
-    .padding({ left: 10, right: 10, top: 14, bottom: Math.max(24, this.safeBottom + 16) })
-    .borderRadius({ topLeft: FnMusicUI.cardRadius, topRight: FnMusicUI.cardRadius })
-    .backgroundColor($r('app.color.surface_elevated'))
+    .height('76%')
+    .padding({ left: 20, right: 20, top: 12, bottom: Math.max(18, this.safeBottom + 12) })
+    .borderRadius({ topLeft: 28, topRight: 28 })
+    .clip(true)
+    .backgroundColor(Color.Transparent)
+    .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.FLOATING_NAVIGATION))
   }
 }
 
@@ -269,7 +444,9 @@ export struct PlaybackQueueSheet {
   @Param safeBottom: number = 0;
   @Event onClose: () => void = (): void => {};
   @Event onSelect: (index: number) => void = (_: number): void => {};
+  @Event onRemove: (index: number) => void = (_: number): void => {};
   @Event onClear: () => void = (): void => {};
+  @Event onRepeat: () => void = (): void => {};
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
@@ -281,8 +458,11 @@ export struct PlaybackQueueSheet {
       QueuePanel({
         state: this.state,
         safeBottom: this.safeBottom,
+        onClose: (): void => this.onClose(),
         onSelect: (index: number): void => this.onSelect(index),
-        onClear: (): void => this.onClear()
+        onRemove: (index: number): void => this.onRemove(index),
+        onClear: (): void => this.onClear(),
+        onRepeat: (): void => this.onRepeat()
       })
     }
     .width('100%')
@@ -391,10 +571,7 @@ struct PlayerControlRow {
 
       Button({ type: ButtonType.Circle, stateEffect: !this.state.roamMode }) {
         if (this.state.roamMode) {
-          Image($r('app.media.mini_player_roam'))
-            .width(22)
-            .height(22)
-            .objectFit(ImageFit.Contain)
+          RoamPulseIcon({ iconSize: 22 })
         } else {
           SymbolGlyph($r('sys.symbol.music_note_list'))
             .fontSize(21)
@@ -481,6 +658,8 @@ struct PlayerLyricPage {
           MusicArtwork({
             artworkSize: 52,
             radius: 8,
+            placeholderMedia: $r('app.media.music_track_placeholder'),
+            placeholderRatio: 0.56,
             coverId: this.track.coverId,
             updatedAt: this.track.updatedAt
           })
@@ -552,16 +731,21 @@ struct PlayerLyricPage {
                   Text(repeatItem.item.text)
                     .width('100%')
                     .height(PLAYER_LYRIC_LINE_HEIGHT)
-                    .fontSize(repeatItem.index === this.highlightedIndex() ? 20 : 17)
+                    .fontSize(20)
                     .lineHeight(PLAYER_LYRIC_LINE_HEIGHT)
                     .fontWeight(repeatItem.index === this.highlightedIndex() ?
                       FontWeight.Bold : FontWeight.Medium)
                     .fontColor(repeatItem.index === this.highlightedIndex() ?
-                      $r('app.color.text_primary') : $r('app.color.text_secondary'))
-                    .opacity(repeatItem.index === this.highlightedIndex() ? 1 : 0.58)
+                      $r('app.color.text_primary') : $r('app.color.player_lyric_inactive'))
+                    .scale({
+                      x: repeatItem.index === this.highlightedIndex() ? 1.035 : 0.985,
+                      y: repeatItem.index === this.highlightedIndex() ? 1.035 : 0.985,
+                      centerX: '0%',
+                      centerY: '50%'
+                    })
                     .maxLines(1)
                     .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    .animation({ duration: 180, curve: Curve.EaseOut })
+                    .animation({ duration: 320, curve: Curve.EaseInOut })
                 })
                 .key((item: LyricLine): string => `${item.timeMs}:${item.text}`)
             }
@@ -577,6 +761,7 @@ struct PlayerLyricPage {
           .layoutWeight(1)
           .width('100%')
           .scrollBar(BarState.Off)
+          .fadingEdge(true, { fadingEdgeLength: LengthMetrics.vp(PLAYER_LYRIC_FADING_EDGE_LENGTH) })
           .onWillScroll((_xOffset: number, _yOffset: number, _scrollState: ScrollState,
             scrollSource: ScrollSource): void => {
             if (this.isUserScrollSource(scrollSource)) {
@@ -782,9 +967,10 @@ struct PlayerLyricPage {
     this.lyricScroller.scrollTo({
       xOffset: 0,
       yOffset: this.state.activeLyricIndex * PLAYER_LYRIC_LINE_HEIGHT,
-      animation: animated ? { duration: 220, curve: Curve.EaseOut } : undefined
+      animation: animated ? { duration: 480, curve: Curve.EaseInOut } : undefined
     });
   }
+
 }
 
 @ComponentV2
@@ -811,6 +997,7 @@ struct ExpandedPlayer {
   @Event onPanel: (panel: ExpandedPanel) => void = (_: ExpandedPanel): void => {};
   @Event onRepeat: () => void = (): void => {};
   @Event onQueueSelect: (index: number) => void = (_: number): void => {};
+  @Event onQueueRemove: (index: number) => void = (_: number): void => {};
   @Event onClearQueue: () => void = (): void => {};
   @Event onRetryLyrics: () => void = (): void => {};
   @Local contentDragOffsetX: number = 0;
@@ -893,12 +1080,14 @@ struct ExpandedPlayer {
           MusicArtwork({
             artworkSize: 252,
             radius: 18,
+            placeholderMedia: $r('app.media.music_track_placeholder'),
+            placeholderRatio: 0.24,
             coverId: this.track().coverId,
             updatedAt: this.track().updatedAt
           })
             .opacity(1 - this.lyricPageProgress())
             .scale({ x: this.coverScale(), y: this.coverScale() })
-            .translate({ x: this.coverTranslateX(), y: this.coverTranslateY() })
+            .translate({ x: this.coverTranslateX(), y: this.coverTranslateY() - PLAYER_COVER_LIFT })
             .animation({ duration: this.contentDragOffsetX === 0 ? 220 : 0, curve: Curve.EaseOut })
 
           PlayerLyricPage({
@@ -1094,7 +1283,9 @@ struct ExpandedPlayer {
           safeBottom: this.safeBottom,
           onClose: (): void => this.onPanel(ExpandedPanel.PLAYER),
           onSelect: (index: number): void => this.onQueueSelect(index),
-          onClear: (): void => this.onClearQueue()
+          onRemove: (index: number): void => this.onQueueRemove(index),
+          onClear: (): void => this.onClearQueue(),
+          onRepeat: (): void => this.onRepeat()
         })
       }
     }
@@ -1245,6 +1436,14 @@ export struct MusicPlayerScreen {
         onRepeat: (): void => this.controller.cycleRepeatMode(),
         onQueueSelect: (index: number): void => {
           this.controller.playAt(index).catch((): void => {});
+        },
+        onQueueRemove: (index: number): void => {
+          const closesPlayer: boolean = this.state.queue.length <= 1;
+          this.controller.removeQueueItem(index).then((): void => {
+            if (closesPlayer) {
+              this.onBack();
+            }
+          }).catch((): void => {});
         },
         onClearQueue: (): void => {
           this.controller.clearQueue().then((): void => this.onBack()).catch((): void => {});

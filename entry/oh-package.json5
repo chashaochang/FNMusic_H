@@ -4,6 +4,6 @@
   "description": "Feiniu Music entry module.",
   "main": "",
   "author": "",
-  "license": "AGPL-3.0-only",
+  "license": "Apache-2.0",
   "dependencies": {}
 }
