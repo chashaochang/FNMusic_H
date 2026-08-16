@@ -265,6 +265,10 @@
       "value": "#2EFFFFFF"
     },
     {
+      "name": "login_brand_material_fallback",
+      "value": "#B8E93345"
+    },
+    {
       "name": "login_input_fill",
       "value": "#0FFFFFFF"
     },
@@ -295,6 +299,22 @@
     {
       "name": "navigation_background",
       "value": "#F2FFFFFF"
+    },
+    {
+      "name": "material_fallback_floating_navigation",
+      "value": "#CCFFFFFF"
+    },
+    {
+      "name": "material_fallback_floating_player",
+      "value": "#BFFFFFFF"
+    },
+    {
+      "name": "material_fallback_interactive",
+      "value": "#80FFFFFF"
+    },
+    {
+      "name": "material_fallback_chip",
+      "value": "#70FFFFFF"
     },
     {
       "name": "text_primary",

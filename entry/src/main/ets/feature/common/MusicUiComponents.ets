@@ -81,7 +81,7 @@ export struct MusicChip {
         .backgroundColor(Color.Transparent)
         .borderRadius(FnMusicUI.chipHeight / 2)
         .clip(true)
-        .systemMaterial(FnMusicMaterials.material(this.selected ?
+        .attributeModifier(FnMusicMaterials.modifier(this.selected ?
           FnMusicMaterialRole.MUSIC_CHIP_SELECTED : FnMusicMaterialRole.CHIP))
         .alignItems(VerticalAlign.Center)
         .onClick((): void => {
@@ -322,7 +322,7 @@ export struct SectionHeader {
           .fontSize(14)
           .fontColor($r('app.color.accent'))
           .backgroundColor(Color.Transparent)
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .borderRadius(FnMusicUI.controlRadius)
           .onClick((): void => {
             this.onAction();
@@ -366,7 +366,7 @@ export struct SecondaryPageHeader {
         .height(FnMusicUI.tapTarget)
         .buttonStyle(ButtonStyleMode.TEXTUAL)
         .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+        .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .accessibilityText('返回')
         .onClick((): void => {
           this.onBack();
@@ -408,7 +408,7 @@ export struct SecondaryPageHeader {
           .height(FnMusicUI.tapTarget)
           .buttonStyle(ButtonStyleMode.TEXTUAL)
           .backgroundColor(Color.Transparent)
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .accessibilityText('更多操作')
           .onClick((): void => {
             this.onTrailing();

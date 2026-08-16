@@ -1,4 +1,5 @@
 import { uiMaterial } from '@kit.ArkUI';
+import { deviceInfo } from '@kit.BasicServicesKit';
 
 export enum FnMusicMaterialRole {
   FLOATING_NAVIGATION = 'floating_navigation',
@@ -11,7 +12,19 @@ export enum FnMusicMaterialRole {
   DETAIL_SEGMENT_SELECTED = 'detail_segment_selected'
 }
 
-/** Shared API 26 immersive materials for native music surfaces. */
+class FnMusicMaterialModifier<T extends CommonAttribute> implements AttributeModifier<T> {
+  private role: FnMusicMaterialRole;
+
+  constructor(role: FnMusicMaterialRole) {
+    this.role = role;
+  }
+
+  applyNormalAttribute(instance: T): void {
+    FnMusicMaterials.apply(instance, this.role);
+  }
+}
+
+/** Shared immersive materials with an API 24 blur fallback. */
 export class FnMusicMaterials {
   private static floatingNavigation?: uiMaterial.Material;
   private static floatingPlayer?: uiMaterial.Material;
@@ -23,7 +36,55 @@ export class FnMusicMaterials {
   private static detailSegmentSelected?: uiMaterial.Material;
   private static readonly lightEffect: uiMaterial.LightEffectOptions = { color: Color.White };
 
+  static modifier<T extends CommonAttribute>(role: FnMusicMaterialRole): AttributeModifier<T> {
+    return new FnMusicMaterialModifier<T>(role);
+  }
+
+  static apply<T extends CommonAttribute>(instance: T, role: FnMusicMaterialRole): void {
+    if (deviceInfo.apiAvailable('26.0.0')) {
+      instance.systemMaterial(FnMusicMaterials.material(role));
+      return;
+    }
+    instance
+      .backgroundBlurStyle(FnMusicMaterials.fallbackBlurStyle(role), {
+        colorMode: ThemeColorMode.SYSTEM,
+        adaptiveColor: AdaptiveColor.DEFAULT,
+        scale: 1
+      })
+      .backgroundColor(FnMusicMaterials.fallbackColor(role));
+  }
+
+  private static fallbackBlurStyle(role: FnMusicMaterialRole): BlurStyle {
+    if (role === FnMusicMaterialRole.FLOATING_NAVIGATION || role === FnMusicMaterialRole.FLOATING_PLAYER) {
+      return BlurStyle.COMPONENT_REGULAR;
+    }
+    return BlurStyle.COMPONENT_THIN;
+  }
+
+  private static fallbackColor(role: FnMusicMaterialRole): ResourceColor {
+    if (role === FnMusicMaterialRole.FLOATING_NAVIGATION) {
+      return $r('app.color.material_fallback_floating_navigation');
+    }
+    if (role === FnMusicMaterialRole.FLOATING_PLAYER) {
+      return $r('app.color.material_fallback_floating_player');
+    }
+    if (role === FnMusicMaterialRole.CHIP_SELECTED) {
+      return $r('app.color.chip_selected_material');
+    }
+    if (role === FnMusicMaterialRole.MUSIC_CHIP_SELECTED) {
+      return $r('app.color.music_chip_selected_material');
+    }
+    if (role === FnMusicMaterialRole.DETAIL_SEGMENT_SELECTED) {
+      return $r('app.color.detail_segment_selected_material');
+    }
+    if (role === FnMusicMaterialRole.CHIP) {
+      return $r('app.color.material_fallback_chip');
+    }
+    return $r('app.color.material_fallback_interactive');
+  }
+
   static material(role: FnMusicMaterialRole): uiMaterial.Material {
+    if (deviceInfo.apiAvailable('26.0.0')) {
     if (role === FnMusicMaterialRole.FLOATING_NAVIGATION) {
       if (FnMusicMaterials.floatingNavigation === undefined) {
         FnMusicMaterials.floatingNavigation = new uiMaterial.ImmersiveMaterial({
@@ -109,5 +170,7 @@ export class FnMusicMaterials {
       });
     }
     return FnMusicMaterials.interactiveSurface;
+    }
+    throw new Error('System material is unavailable below API 26.');
   }
 }

@@ -1,4 +1,5 @@
 import { uiMaterial } from '@kit.ArkUI';
+import { deviceInfo } from '@kit.BasicServicesKit';
 
 export enum FnMusicLoginMaterialRole {
   BRAND_MARK = 'brand_mark',
@@ -7,7 +8,19 @@ export enum FnMusicLoginMaterialRole {
   SECONDARY_ACTION = 'secondary_action'
 }
 
-/** Cached API 26 materials used only by the login surface. */
+class FnMusicLoginMaterialModifier<T extends CommonAttribute> implements AttributeModifier<T> {
+  private role: FnMusicLoginMaterialRole;
+
+  constructor(role: FnMusicLoginMaterialRole) {
+    this.role = role;
+  }
+
+  applyNormalAttribute(instance: T): void {
+    FnMusicLoginMaterials.apply(instance, this.role);
+  }
+}
+
+/** Cached login materials with an API 24 blur fallback. */
 export class FnMusicLoginMaterials {
   private static brandMark?: uiMaterial.Material;
   private static input?: uiMaterial.Material;
@@ -17,7 +30,33 @@ export class FnMusicLoginMaterials {
     color: Color.White
   };
 
+  static modifier<T extends CommonAttribute>(role: FnMusicLoginMaterialRole): AttributeModifier<T> {
+    return new FnMusicLoginMaterialModifier<T>(role);
+  }
+
+  static apply<T extends CommonAttribute>(instance: T, role: FnMusicLoginMaterialRole): void {
+    if (deviceInfo.apiAvailable('26.0.0')) {
+      instance.systemMaterial(FnMusicLoginMaterials.material(role));
+      return;
+    }
+    instance
+      .backgroundBlurStyle(BlurStyle.COMPONENT_THIN, {
+        colorMode: ThemeColorMode.DARK,
+        adaptiveColor: AdaptiveColor.DEFAULT,
+        scale: 1
+      })
+      .backgroundColor(FnMusicLoginMaterials.fallbackColor(role));
+  }
+
+  private static fallbackColor(role: FnMusicLoginMaterialRole): ResourceColor {
+    if (role === FnMusicLoginMaterialRole.BRAND_MARK || role === FnMusicLoginMaterialRole.PRIMARY_ACTION) {
+      return $r('app.color.login_brand_material_fallback');
+    }
+    return $r('app.color.login_material_tint');
+  }
+
   static material(role: FnMusicLoginMaterialRole): uiMaterial.Material {
+    if (deviceInfo.apiAvailable('26.0.0')) {
     if (role === FnMusicLoginMaterialRole.BRAND_MARK) {
       if (FnMusicLoginMaterials.brandMark === undefined) {
         FnMusicLoginMaterials.brandMark = new uiMaterial.ImmersiveMaterial({
@@ -68,5 +107,7 @@ export class FnMusicLoginMaterials {
       });
     }
     return FnMusicLoginMaterials.input;
+    }
+    throw new Error('System material is unavailable below API 26.');
   }
 }

@@ -19,7 +19,7 @@ Dependency installation completed with the DevEco-bundled Node and ohpm CLI. The
 
 The following stages completed successfully:
 
-- LocalUnit (39 passed, 0 failed)
+- LocalUnit (40 passed, 0 failed, 0 errors)
 - CompileResource
 - CompileArkTS
 - PackageHap
@@ -30,11 +30,11 @@ Final build result: `BUILD SUCCESSFUL`.
 
 Artifact:
 
-- `dist/FNMusic_H-1.0.1-unsigned.hap`
-- Version: `1.0.1` (`versionCode=1000001`, `buildVersion=2`)
-- SDK: target/compatible API 26 Beta2
-- Size: 2677398 bytes
-- SHA-256: `5a9bf2ff2a70ccdf9444225fd3a893708cb9161224260eb226f9b8da69808c81`
+- `dist/FNMusic_H-1.0.2-unsigned.hap`
+- Version: `1.0.2` (`versionCode=1000002`, `buildVersion=3`)
+- SDK: target API 26 Beta2, compatible API 24
+- Size: 2702977 bytes
+- SHA-256: `0915366d562f05a7604a2a923b5b70a0610f7a56b470ff004e9685c77757613b`
 
 The HAP archive passed `unzip -t` without compressed-data errors.
 

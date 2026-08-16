@@ -198,7 +198,7 @@ export struct MiniPlayerBar {
     .alignItems(VerticalAlign.Center)
     .borderRadius(this.playerHeight() / 2)
     .clip(true)
-    .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.FLOATING_PLAYER))
+    .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.FLOATING_PLAYER))
     .id(this.transitionId)
   }
 }
@@ -259,7 +259,7 @@ struct QueuePanel {
         .width(44)
         .height(44)
         .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+        .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .accessibilityText('关闭播放列表')
         .onClick((): void => this.onClose())
       }
@@ -278,7 +278,7 @@ struct QueuePanel {
           .height(42)
           .borderRadius(21)
           .backgroundColor(Color.Transparent)
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.CHIP_SELECTED))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.CHIP_SELECTED))
           .onClick((): void => { this.selectedTab = 0; })
         } else {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
@@ -305,7 +305,7 @@ struct QueuePanel {
           .height(42)
           .borderRadius(21)
           .backgroundColor(Color.Transparent)
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.CHIP_SELECTED))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.CHIP_SELECTED))
           .onClick((): void => { this.selectedTab = 1; })
         } else {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
@@ -477,7 +477,7 @@ struct QueuePanel {
     .borderRadius({ topLeft: 28, topRight: 28 })
     .clip(true)
     .backgroundColor(Color.Transparent)
-    .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.FLOATING_NAVIGATION))
+    .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.FLOATING_NAVIGATION))
   }
 }
 

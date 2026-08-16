@@ -69,7 +69,7 @@ struct HomeStickyChipHeader {
         .height(40)
         .buttonStyle(ButtonStyleMode.TEXTUAL)
         .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+        .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .accessibilityText('搜索')
         .onClick((): void => this.onOpenSearch())
       } else if (this.state.menuReserved) {
@@ -117,7 +117,7 @@ struct HomeSearchEntry {
     .borderRadius(FnMusicUI.searchHeight / 2)
     .clip(true)
     .backgroundColor(Color.Transparent)
-    .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+    .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
     .onAreaChange((_: Area, area: Area): void => {
       this.onPositionChange(area.globalPosition.y as number, area.height as number);
     })

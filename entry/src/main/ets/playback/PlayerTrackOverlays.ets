@@ -66,7 +66,7 @@ export struct PlayerTrackMenu {
     .borderRadius(FnMusicUI.controlRadius)
     .backgroundColor($r('app.color.surface_elevated'))
     .clip(true)
-    .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+    .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
   }
 }
 

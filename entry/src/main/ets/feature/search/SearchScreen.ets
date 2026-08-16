@@ -151,7 +151,7 @@ struct SearchStartState {
       .height(FnMusicUI.searchStartIconContainerSize)
       .borderRadius(FnMusicUI.searchStartIconContainerSize / 2)
       .backgroundColor(Color.Transparent)
-      .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+      .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
 
       Text('输入关键词开始搜索')
         .fontSize(FnMusicUI.bodySize)
@@ -314,7 +314,7 @@ export struct SearchScreen {
         .width(FnMusicUI.tapTarget)
         .height(FnMusicUI.tapTarget)
         .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+        .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .accessibilityText('返回')
         .onClick((): void => {
           this.onBack();
@@ -332,7 +332,7 @@ export struct SearchScreen {
           .borderRadius(FnMusicUI.searchHeight / 2)
           .backgroundColor(Color.Transparent)
           .clip(true)
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .onChange((value: string): void => {
             this.query = value;
             this.scheduleSearch();

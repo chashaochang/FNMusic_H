@@ -104,7 +104,7 @@ export struct TrackActionsSheet {
           .width(FnMusicUI.tapTarget)
           .height(FnMusicUI.tapTarget)
           .backgroundColor($r('app.color.surface_secondary'))
-          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .accessibilityText('关闭歌曲操作')
           .onClick((): void => this.onClose())
         }
@@ -176,7 +176,7 @@ export struct TrackActionsSheet {
       .borderRadius({ topLeft: FnMusicUI.cardRadius + 8, topRight: FnMusicUI.cardRadius + 8 })
       .backgroundColor($r('app.color.surface_elevated'))
       .clip(true)
-      .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+      .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
       .transition(TransitionEffect.translate({ y: 72 }).combine(TransitionEffect.OPACITY))
     }
     .width('100%')

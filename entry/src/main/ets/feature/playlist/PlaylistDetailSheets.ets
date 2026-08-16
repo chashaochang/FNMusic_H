@@ -31,7 +31,7 @@ struct PlaylistSheetHeader {
       .width(FnMusicUI.tapTarget)
       .height(FnMusicUI.tapTarget)
       .backgroundColor(Color.Transparent)
-      .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+      .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
       .accessibilityText(`关闭${this.title}`)
       .onClick((): void => this.onClose())
     }

@@ -331,7 +331,7 @@ struct HomeBottomChrome {
       .height(FnMusicUI.bottomBarHeight)
       .borderRadius(FnMusicUI.bottomBarHeight / 2)
       .clip(true)
-      .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.FLOATING_PLAYER))
+      .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.FLOATING_PLAYER))
       .position({ x: this.navigationX(), y: this.navigationTop() })
 
       if (this.hasPlayer()) {

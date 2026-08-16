@@ -631,7 +631,7 @@ struct LoginRetryActionV2 {
     .height(FnMusicLoginMetrics.actionHeight)
     .borderRadius(FnMusicLoginMetrics.actionRadius)
     .accessibilityText('重试自动连接')
-    .systemMaterial(FnMusicLoginMaterials.material(FnMusicLoginMaterialRole.SECONDARY_ACTION))
+    .attributeModifier(FnMusicLoginMaterials.modifier(FnMusicLoginMaterialRole.SECONDARY_ACTION))
     .onClick((): void => this.onAction())
     .transition(TransitionEffect.OPACITY.animation({
       duration: FnMusicLoginMetrics.contentMotionDuration,
