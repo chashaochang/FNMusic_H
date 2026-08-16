@@ -16,7 +16,7 @@ import {
   GenreCollectionScreen
 } from '../feature/library/CollectionScreens';
 import { TrackActionsSheet } from '../feature/library/TrackActionsSheet';
-import { TrackListScreen } from '../feature/library/TrackListScreen';
+import { TrackListScreen, TrackSortMode } from '../feature/library/TrackListScreen';
 import {
   PlaylistActionsSheet,
   PlaylistSortKey,
@@ -37,7 +37,8 @@ import {
   MusicGenre,
   MusicPlaylist,
   MusicTrack,
-  MusicUser
+  MusicUser,
+  PageResult
 } from '../model/MusicModels';
 import { MusicPlaybackController } from '../playback/MusicPlaybackController';
 import { PlayerPresentationState, connectPlayerPresentationState } from '../playback/PlayerPresentationStore';
@@ -391,8 +392,14 @@ class ArtistDetailSnapshot {
   pageSymbol: Resource = $r('sys.symbol.person_fill');
   artist: MusicArtist = new MusicArtist();
   tracks: MusicTrack[] = [];
+  trackTotal: number = 0;
+  trackDeclaredTotal: number = 0;
+  trackPage: number = 0;
+  tracksHasMore: boolean = false;
   loading: boolean = false;
+  loadingMore: boolean = false;
   errorMessage: string = '';
+  loadMoreError: string = '';
 }
 
 @ComponentV2
@@ -410,6 +417,10 @@ export struct AppShell {
   @Local pageSubtitle: string = '';
   @Local pageSymbol: Resource = $r('sys.symbol.music_note_list');
   @Local activeTracks: MusicTrack[] = [];
+  @Local activeTrackTotal: number = 0;
+  @Local activeTracksHasMore: boolean = false;
+  @Local activeTracksLoadingMore: boolean = false;
+  @Local activeTracksLoadMoreError: string = '';
   @Local activeTrack: MusicTrack = new MusicTrack();
   @Local activeAlbum: MusicAlbum = new MusicAlbum();
   @Local activeArtist: MusicArtist = new MusicArtist();
@@ -439,6 +450,8 @@ export struct AppShell {
   @Local activeTracksLoading: boolean = false;
   @Local activeTracksError: string = '';
   @Local activeCollectionId: string = '';
+  @Local playAllInProgress: boolean = false;
+  @Local playAllShuffleInProgress: boolean = false;
   @Local playerState: PlayerPresentationState = connectPlayerPresentationState();
   @Local preferences: MusicPreferenceState = connectMusicPreferenceState();
   @Local navigationEnabled: boolean = true;
@@ -448,6 +461,8 @@ export struct AppShell {
   private nextLocalPlaylistId: number = 1;
   private searchSequence: number = 0;
   private tracksLoadSequence: number = 0;
+  private activeTracksPage: number = 0;
+  private activeTrackDeclaredTotal: number = 0;
   private playback: MusicPlaybackController = MusicPlaybackController.instance();
   private tabsController: HdsTabsController = new HdsTabsController();
   private homeScroller: Scroller = new Scroller();
@@ -984,6 +999,120 @@ export struct AppShell {
     return this.tracks();
   }
 
+  private resetActiveTrackPaging(total: number = 0): void {
+    this.activeTrackTotal = Math.max(0, total);
+    this.activeTrackDeclaredTotal = Math.max(0, total);
+    this.activeTracksPage = 0;
+    this.activeTracksHasMore = false;
+    this.activeTracksLoadingMore = false;
+    this.activeTracksLoadMoreError = '';
+  }
+
+  private activeTrackPageSize(): number {
+    if (this.activeCollectionId === CollectionKind.PLAYLIST) {
+      return 300;
+    }
+    if (this.activeCollectionId === CollectionKind.FAVORITES ||
+      this.activeCollectionId === CollectionKind.HISTORY) {
+      return 100;
+    }
+    return 120;
+  }
+
+  private supportsActiveTrackPaging(): boolean {
+    return this.activeCollectionId === CollectionKind.FAVORITES ||
+      this.activeCollectionId === CollectionKind.HISTORY ||
+      this.activeCollectionId === CollectionKind.ALBUM ||
+      this.activeCollectionId === CollectionKind.ARTIST ||
+      this.activeCollectionId === CollectionKind.GENRE ||
+      this.activeCollectionId === CollectionKind.PLAYLIST;
+  }
+
+  private async requestActiveTrackPage(page: number): Promise<PageResult<MusicTrack>> {
+    if (this.activeCollectionId === CollectionKind.FAVORITES) {
+      return await AppRuntime.favoriteTracksPage(page, this.activeTrackPageSize());
+    }
+    if (this.activeCollectionId === CollectionKind.HISTORY) {
+      return await AppRuntime.playHistoryPage(page, this.activeTrackPageSize());
+    }
+    if (this.activeCollectionId === CollectionKind.ALBUM) {
+      return await AppRuntime.albumTracksPage(this.activeAlbum.guid, page, this.activeTrackPageSize());
+    }
+    if (this.activeCollectionId === CollectionKind.ARTIST) {
+      return await AppRuntime.artistTracksPage(this.activeArtist.guid, page, this.activeTrackPageSize());
+    }
+    if (this.activeCollectionId === CollectionKind.GENRE) {
+      return await AppRuntime.genreTracksPage(this.activeGenre.guid, page, this.activeTrackPageSize());
+    }
+    if (this.activeCollectionId === CollectionKind.PLAYLIST) {
+      return await AppRuntime.playlistTracksPage(this.activePlaylist.guid, page, this.activeTrackPageSize());
+    }
+    throw new Error('当前列表不支持分页加载');
+  }
+
+  private appendUniqueActiveTracks(current: MusicTrack[], incoming: MusicTrack[]): MusicTrack[] {
+    const known = new Set<string>(current.map((track: MusicTrack): string => track.guid));
+    const additions = incoming.filter((track: MusicTrack): boolean =>
+      track.guid.length > 0 && !known.has(track.guid));
+    return current.concat(additions);
+  }
+
+  private async loadActiveTrackPage(page: number, replace: boolean): Promise<void> {
+    if (!this.supportsActiveTrackPaging()) {
+      return;
+    }
+    const sequence = ++this.tracksLoadSequence;
+    if (replace) {
+      this.activeTracksLoading = true;
+      this.activeTracksError = '';
+      this.activeTracksLoadMoreError = '';
+    } else {
+      this.activeTracksLoadingMore = true;
+      this.activeTracksLoadMoreError = '';
+    }
+    try {
+      const result: PageResult<MusicTrack> = await this.requestActiveTrackPage(page);
+      if (sequence !== this.tracksLoadSequence) {
+        return;
+      }
+      const tracks: MusicTrack[] = replace ? this.appendUniqueActiveTracks([], result.list) :
+        this.appendUniqueActiveTracks(this.activeTracks, result.list);
+      const declaredTotal: number = Math.max(this.activeTrackDeclaredTotal, result.total);
+      const total: number = Math.max(declaredTotal, tracks.length);
+      this.activeTracks = tracks;
+      this.activeTrackTotal = total;
+      this.activeTrackDeclaredTotal = declaredTotal;
+      this.activeTracksPage = page;
+      this.activeTracksHasMore = result.list.length > 0 &&
+        (declaredTotal > 0 ? tracks.length < declaredTotal : result.list.length >= this.activeTrackPageSize());
+    } catch (error) {
+      if (sequence === this.tracksLoadSequence) {
+        const message: string = (error as Error).message || '列表加载失败';
+        if (replace) {
+          this.activeTracksError = message;
+        } else {
+          this.activeTracksLoadMoreError = message;
+        }
+      }
+    } finally {
+      if (sequence === this.tracksLoadSequence) {
+        if (replace) {
+          this.activeTracksLoading = false;
+        } else {
+          this.activeTracksLoadingMore = false;
+        }
+      }
+    }
+  }
+
+  private loadMoreActiveTracks(): void {
+    if (!this.supportsActiveTrackPaging() || this.activeTracksLoading || this.activeTracksLoadingMore ||
+      !this.activeTracksHasMore) {
+      return;
+    }
+    this.loadActiveTrackPage(Math.max(1, this.activeTracksPage) + 1, false).catch((): void => {});
+  }
+
   private openCollection(id: string, title: string): void {
     this.activeCollectionId = id;
     this.pageTitle = title;
@@ -992,10 +1121,12 @@ export struct AppShell {
       id === 'history' ? $r('sys.symbol.arrow_clockwise') :
         id === 'roam' ? $r('sys.symbol.crown_fill') : $r('sys.symbol.music_note_list');
     this.activeTracks = this.runtime === undefined ? this.tracksForCollection(id) : [];
+    this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length :
+      (id === CollectionKind.LIBRARY ? this.runtime?.trackTotal ?? 0 : 0));
     this.activeTracksError = '';
     this.openPage(AppShellPage.TRACKS);
     if (this.runtime !== undefined) {
-      this.loadCollection(id);
+      this.loadCollection(id).catch((): void => {});
     }
   }
 
@@ -1007,10 +1138,11 @@ export struct AppShell {
     this.pageSymbol = $r('sys.symbol.music_note_list');
     this.activeTracks = this.runtime === undefined ? this.tracks().filter((track: MusicTrack): boolean =>
       track.albumGuid === album.guid || track.albumName === album.name) : [];
+    this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : album.trackCount);
     this.activeTracksError = '';
     this.openPage(AppShellPage.ALBUM_DETAIL);
     if (this.runtime !== undefined) {
-      this.loadDetail(() => AppRuntime.albumTracks(album.guid));
+      this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
@@ -1022,8 +1154,14 @@ export struct AppShell {
     snapshot.pageSymbol = this.pageSymbol;
     snapshot.artist = this.activeArtist;
     snapshot.tracks = this.activeTracks.slice();
+    snapshot.trackTotal = this.activeTrackTotal;
+    snapshot.trackDeclaredTotal = this.activeTrackDeclaredTotal;
+    snapshot.trackPage = this.activeTracksPage;
+    snapshot.tracksHasMore = this.activeTracksHasMore;
     snapshot.loading = this.activeTracksLoading;
+    snapshot.loadingMore = this.activeTracksLoadingMore;
     snapshot.errorMessage = this.activeTracksError;
+    snapshot.loadMoreError = this.activeTracksLoadMoreError;
     this.artistDetailSnapshot = snapshot;
     this.openAlbum(album);
   }
@@ -1035,8 +1173,14 @@ export struct AppShell {
     this.pageSymbol = snapshot.pageSymbol;
     this.activeArtist = snapshot.artist;
     this.activeTracks = snapshot.tracks;
+    this.activeTrackTotal = snapshot.trackTotal;
+    this.activeTrackDeclaredTotal = snapshot.trackDeclaredTotal;
+    this.activeTracksPage = snapshot.trackPage;
+    this.activeTracksHasMore = snapshot.tracksHasMore;
     this.activeTracksLoading = snapshot.loading;
+    this.activeTracksLoadingMore = snapshot.loadingMore;
     this.activeTracksError = snapshot.errorMessage;
+    this.activeTracksLoadMoreError = snapshot.loadMoreError;
   }
 
   private openArtist(artist: MusicArtist): void {
@@ -1047,10 +1191,11 @@ export struct AppShell {
     this.pageSymbol = $r('sys.symbol.person_fill');
     this.activeTracks = this.runtime === undefined ? this.tracks().filter((track: MusicTrack): boolean =>
       track.artistGuid === artist.guid || track.artistName === artist.name) : [];
+    this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : artist.trackCount);
     this.activeTracksError = '';
     this.openPage(AppShellPage.ARTIST_DETAIL);
     if (this.runtime !== undefined) {
-      this.loadDetail(() => AppRuntime.artistTracks(artist.guid));
+      this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
@@ -1063,10 +1208,11 @@ export struct AppShell {
     this.pageSubtitle = `${genre.trackCount} 首歌曲`;
     this.pageSymbol = $r('sys.symbol.music_badge_wave_2');
     this.activeTracks = this.runtime === undefined ? this.tracks() : [];
+    this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : genre.trackCount);
     this.activeTracksError = '';
     this.openPage(AppShellPage.GENRE_DETAIL);
     if (this.runtime !== undefined) {
-      this.loadDetail(() => AppRuntime.genreTracks(genre.guid));
+      this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
@@ -1082,23 +1228,23 @@ export struct AppShell {
     this.pageSymbol = $r('sys.symbol.music_note_list');
     this.activeTracks = this.runtime === undefined ?
       this.tracks().slice(0, Math.min(this.tracks().length, Math.max(1, playlist.trackCount))) : [];
+    this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : playlist.trackCount);
     this.activeTracksError = '';
     this.openPage(AppShellPage.PLAYLIST_DETAIL);
     if (this.runtime !== undefined) {
-      this.loadDetail(() => AppRuntime.playlistTracks(playlist.guid));
+      this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
   private async loadCollection(id: string): Promise<void> {
-    let load: () => Promise<MusicTrack[]> = async (): Promise<MusicTrack[]> => this.tracks();
-    if (id === 'favorites') {
-      load = (): Promise<MusicTrack[]> => AppRuntime.favoriteTracks();
-    } else if (id === 'history') {
-      load = (): Promise<MusicTrack[]> => AppRuntime.playHistory();
-    } else if (id === 'roam') {
-      load = (): Promise<MusicTrack[]> => AppRuntime.startRoam();
+    if (id === CollectionKind.LIBRARY || id === CollectionKind.RECENTLY_ADDED) {
+      return;
     }
-    await this.loadDetail(load);
+    if (id === CollectionKind.ROAM) {
+      await this.loadDetail((): Promise<MusicTrack[]> => AppRuntime.startRoam());
+      return;
+    }
+    await this.loadActiveTrackPage(1, true);
   }
 
   private async loadDetail(load: () => Promise<MusicTrack[]>): Promise<void> {
@@ -1109,6 +1255,10 @@ export struct AppShell {
       const tracks = await load();
       if (sequence === this.tracksLoadSequence) {
         this.activeTracks = tracks;
+        this.activeTrackTotal = tracks.length;
+        this.activeTrackDeclaredTotal = tracks.length;
+        this.activeTracksPage = tracks.length > 0 ? 1 : 0;
+        this.activeTracksHasMore = false;
       }
     } catch (error) {
       if (sequence === this.tracksLoadSequence) {
@@ -1176,6 +1326,8 @@ export struct AppShell {
         await AppRuntime.removeTracksFromPlaylist(this.activePlaylist.guid, guids);
       }
       this.activeTracks = this.activeTracks.filter((track: MusicTrack): boolean => !guids.includes(track.guid));
+      this.activeTrackTotal = Math.max(0, this.activeTrackTotal - guids.length);
+      this.activeTrackDeclaredTotal = Math.max(0, this.activeTrackDeclaredTotal - guids.length);
       this.activePlaylist.trackCount = Math.max(0, this.activePlaylist.trackCount - guids.length);
       if (this.runtime !== undefined) {
         this.runtime.playlists = this.runtime.playlists.slice();
@@ -1239,12 +1391,87 @@ export struct AppShell {
     });
   }
 
+  private sortTracksForPlayback(tracks: MusicTrack[], collectionId: string, sortMode: TrackSortMode,
+    playlistSortKey: PlaylistSortKey, playlistSortOrder: PlaylistSortOrder): MusicTrack[] {
+    const sorted: MusicTrack[] = tracks.slice();
+    if (collectionId === CollectionKind.PLAYLIST) {
+      if (playlistSortKey === PlaylistSortKey.TITLE) {
+        sorted.sort((left: MusicTrack, right: MusicTrack): number => left.title.localeCompare(right.title));
+        return playlistSortOrder === PlaylistSortOrder.ASCENDING ? sorted : sorted.reverse();
+      }
+      return playlistSortOrder === PlaylistSortOrder.ASCENDING ? sorted.reverse() : sorted;
+    }
+    if (sortMode === TrackSortMode.TITLE_ASC || sortMode === TrackSortMode.TITLE_DESC) {
+      sorted.sort((left: MusicTrack, right: MusicTrack): number => {
+        const compare: number = left.title.localeCompare(right.title);
+        return sortMode === TrackSortMode.TITLE_ASC ? compare : -compare;
+      });
+    }
+    return sorted;
+  }
+
+  private async playAllActiveCollection(sortMode: TrackSortMode, shuffle: boolean): Promise<void> {
+    if (this.playAllInProgress) {
+      FnToast.show('正在加载全部歌曲，请稍候');
+      return;
+    }
+    const collectionId: string = this.activeCollectionId;
+    const loadedTracks: MusicTrack[] = collectionId === CollectionKind.LIBRARY && this.runtime !== undefined ?
+      this.runtime.tracks.slice() : this.activeTracks.slice();
+    const total: number = collectionId === CollectionKind.LIBRARY && this.runtime !== undefined ?
+      this.runtime.trackTotal : this.activeTrackDeclaredTotal;
+    const albumGuid: string = this.activeAlbum.guid;
+    const artistGuid: string = this.activeArtist.guid;
+    const genreGuid: string = this.activeGenre.guid;
+    const playlistGuid: string = this.activePlaylist.guid;
+    const playlistSortKey: PlaylistSortKey = this.playlistSortKey;
+    const playlistSortOrder: PlaylistSortOrder = this.playlistSortOrder;
+    this.playAllInProgress = true;
+    this.playAllShuffleInProgress = shuffle;
+    try {
+      let tracks: MusicTrack[] = loadedTracks;
+      let continuousRoam: boolean = false;
+      if (this.runtime !== undefined) {
+        if (collectionId === CollectionKind.FAVORITES) {
+          tracks = await AppRuntime.favoriteTracksAll(loadedTracks, total);
+        } else if (collectionId === CollectionKind.HISTORY) {
+          tracks = await AppRuntime.playHistoryAll(loadedTracks, total);
+        } else if (collectionId === CollectionKind.ALBUM) {
+          tracks = await AppRuntime.albumTracksAll(albumGuid, loadedTracks, total);
+        } else if (collectionId === CollectionKind.ARTIST) {
+          tracks = await AppRuntime.artistTracksAll(artistGuid, loadedTracks, total);
+        } else if (collectionId === CollectionKind.GENRE) {
+          tracks = await AppRuntime.genreTracksAll(genreGuid, loadedTracks, total);
+        } else if (collectionId === CollectionKind.PLAYLIST) {
+          tracks = await AppRuntime.playlistTracksAll(playlistGuid, loadedTracks, total);
+        } else if (collectionId === CollectionKind.ROAM) {
+          tracks = await AppRuntime.startRoam();
+          continuousRoam = true;
+        } else {
+          tracks = await AppRuntime.libraryTracksAll(loadedTracks, total);
+        }
+      }
+      const sorted: MusicTrack[] = this.sortTracksForPlayback(
+        tracks, collectionId, sortMode, playlistSortKey, playlistSortOrder);
+      const startIndex: number = shuffle && sorted.length > 1 ? Math.floor(Math.random() * sorted.length) : 0;
+      this.playTracks(sorted, startIndex, continuousRoam);
+    } catch (error) {
+      FnToast.show((error as Error).message || '全部歌曲加载失败');
+    } finally {
+      this.playAllInProgress = false;
+      this.playAllShuffleInProgress = false;
+    }
+  }
+
   private async playAlbum(album: MusicAlbum): Promise<void> {
     try {
+      const isActiveAlbum: boolean = this.activeCollectionId === CollectionKind.ALBUM &&
+        this.activeAlbum.guid === album.guid;
       const tracks: MusicTrack[] = this.runtime === undefined ?
         this.tracks().filter((track: MusicTrack): boolean =>
           track.albumGuid === album.guid || track.albumName === album.name) :
-        await AppRuntime.albumTracks(album.guid);
+        await AppRuntime.albumTracksAll(album.guid, isActiveAlbum ? this.activeTracks : [],
+          isActiveAlbum ? this.activeTrackDeclaredTotal : album.trackCount);
       this.playTracks(tracks, 0);
     } catch (error) {
       FnToast.show((error as Error).message || '专辑歌曲加载失败');
@@ -1257,10 +1484,11 @@ export struct AppShell {
       return;
     }
     try {
-      const tracks = id === 'favorites' ? await AppRuntime.favoriteTracks() :
-        id === 'history' ? await AppRuntime.playHistory() :
-          id === 'roam' ? await AppRuntime.startRoam() : this.tracks();
-      this.playTracks(tracks, 0, id === 'roam');
+      const tracks: MusicTrack[] = id === CollectionKind.FAVORITES ? await AppRuntime.favoriteTracksAll() :
+        id === CollectionKind.HISTORY ? await AppRuntime.playHistoryAll() :
+          id === CollectionKind.ROAM ? await AppRuntime.startRoam() :
+            await AppRuntime.libraryTracksAll(this.runtime.tracks, this.runtime.trackTotal);
+      this.playTracks(tracks, 0, id === CollectionKind.ROAM);
     } catch (error) {
       FnToast.show((error as Error).message || '列表加载失败');
     }
@@ -1558,12 +1786,22 @@ export struct AppShell {
           bottomInset: this.bottomAvoidance(),
           loading: this.activeTracksLoading,
           errorMessage: this.activeTracksError,
+          totalCount: this.activeTrackTotal,
+          hasMore: this.activeTracksHasMore,
+          loadingMore: this.activeTracksLoadingMore,
+          loadMoreError: this.activeTracksLoadMoreError,
+          playAllLoading: this.playAllInProgress,
+          playAllShuffleLoading: this.playAllShuffleInProgress,
           playlistSortKey: this.playlistSortKey,
           playlistSortOrder: this.playlistSortOrder,
           playlistSelectionMode: this.playlistSelectionMode,
           playlistOperationBusy: this.playlistOperationBusy,
           onBack: (): void => this.goBack(),
           onPlay: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
+          onPlayAll: (sortMode: TrackSortMode, shuffle: boolean): void => {
+            this.playAllActiveCollection(sortMode, shuffle).catch((): void => {});
+          },
+          onLoadMore: (): void => this.loadMoreActiveTracks(),
           onFavorite: (track: MusicTrack, favorite: boolean): void =>
             this.setTrackFavorite(track, favorite),
           onOpenAlbum: (album: MusicAlbum): void => this.openAlbumFromArtist(album),
@@ -1821,6 +2059,8 @@ export struct AppShell {
             AppRuntime.removeTrackFromPlaylist(this.activePlaylist.guid, this.activeTrack.guid).then((): void => {
               this.activeTracks = this.activeTracks.filter((track: MusicTrack): boolean =>
                 track.guid !== this.activeTrack.guid);
+              this.activeTrackTotal = Math.max(0, this.activeTrackTotal - 1);
+              this.activeTrackDeclaredTotal = Math.max(0, this.activeTrackDeclaredTotal - 1);
               this.activePlaylist.trackCount = Math.max(0, this.activePlaylist.trackCount - 1);
               if (this.runtime !== undefined) {
                 this.runtime.playlists = this.runtime.playlists.slice();

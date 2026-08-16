@@ -30,7 +30,7 @@ import {
 } from './LibraryVisualComponents';
 import { PlaylistSortKey, PlaylistSortOrder } from '../playlist/PlaylistDetailSheets';
 
-enum TrackSortMode {
+export enum TrackSortMode {
   DEFAULT = 'default',
   TITLE_ASC = 'title_asc',
   TITLE_DESC = 'title_desc'
@@ -42,12 +42,60 @@ class ArtistSectionState {
 }
 
 @ComponentV2
+struct TrackPagingFooter {
+  @Param loaded: number = 0;
+  @Param total: number = 0;
+  @Param hasMore: boolean = false;
+  @Param loading: boolean = false;
+  @Param errorMessage: string = '';
+  @Event onRetry: () => void = (): void => {};
+
+  build() {
+    Column({ space: FnMusicUI.compactGap }) {
+      if (this.loading) {
+        LoadingProgress()
+          .width(24)
+          .height(24)
+          .color($r('app.color.accent'))
+        Text('正在加载更多')
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+      } else if (this.errorMessage.length > 0) {
+        Text(this.errorMessage)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(2)
+          .textAlign(TextAlign.Center)
+        Button('重试加载')
+          .height(36)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.accent'))
+          .backgroundColor($r('app.color.surface_secondary'))
+          .borderRadius(FnMusicUI.controlRadius)
+          .onClick((): void => this.onRetry())
+      } else if (this.hasMore) {
+        Text(this.total > 0 ? `已加载 ${this.loaded} / 共 ${this.total}` : `已加载 ${this.loaded} 首`)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+      }
+    }
+    .width('100%')
+    .height(this.errorMessage.length > 0 ? 96 : (this.loading || this.hasMore ? 64 : 0))
+    .justifyContent(FlexAlign.Center)
+  }
+}
+
+@ComponentV2
 struct ImageDetailTrackList {
   @Require @Param scroller: Scroller;
   @Param tracks: MusicTrack[] = [];
   @Param totalCount: number = 0;
   @Param loading: boolean = false;
   @Param errorMessage: string = '';
+  @Param hasMore: boolean = false;
+  @Param loadingMore: boolean = false;
+  @Param loadMoreError: string = '';
+  @Param playAllLoading: boolean = false;
   @Param bottomInset: number = 0;
   @Param showActionRow: boolean = false;
   @Param showIndex: boolean = true;
@@ -68,6 +116,7 @@ struct ImageDetailTrackList {
     (_: MusicTrack, __: boolean): void => {};
   @Event onToggleSelection: (track: MusicTrack) => void = (_: MusicTrack): void => {};
   @Event onSort: () => void = (): void => {};
+  @Event onLoadMore: () => void = (): void => {};
 
   build() {
     List({ space: 0, scroller: this.scroller }) {
@@ -75,6 +124,7 @@ struct ImageDetailTrackList {
         ListItem() {
           CollectionActionRow({
             count: this.totalCount,
+            loading: this.playAllLoading,
             onPlayAll: (): void => this.onPlayAll(),
             onMore: (): void => this.onSort()
           })
@@ -159,6 +209,20 @@ struct ImageDetailTrackList {
           .virtualScroll()
       }
 
+      if (!this.loading && (this.loadingMore || this.loadMoreError.length > 0 || this.hasMore)) {
+        ListItem() {
+          TrackPagingFooter({
+            loaded: this.tracks.length,
+            total: this.totalCount,
+            hasMore: this.hasMore,
+            loading: this.loadingMore,
+            errorMessage: this.loadMoreError,
+            onRetry: (): void => this.onLoadMore()
+          })
+        }
+        .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
+      }
+
       ListItem().height(this.bottomInset + FnMusicUI.sectionGap)
     }
     .width('100%')
@@ -169,6 +233,7 @@ struct ImageDetailTrackList {
       scrollForward: NestedScrollMode.PARENT_FIRST,
       scrollBackward: NestedScrollMode.SELF_FIRST
     })
+    .onReachEnd((): void => this.onLoadMore())
   }
 }
 
@@ -243,6 +308,12 @@ export struct TrackListScreen {
   @Param bottomInset: number = 0;
   @Param loading: boolean = false;
   @Param errorMessage: string = '';
+  @Param totalCount: number = 0;
+  @Param hasMore: boolean = false;
+  @Param loadingMore: boolean = false;
+  @Param loadMoreError: string = '';
+  @Param playAllLoading: boolean = false;
+  @Param playAllShuffleLoading: boolean = false;
   @Param playlistSortKey: PlaylistSortKey = PlaylistSortKey.ADDED_DATE;
   @Param playlistSortOrder: PlaylistSortOrder = PlaylistSortOrder.DESCENDING;
   @Param playlistSelectionMode: boolean = false;
@@ -258,6 +329,9 @@ export struct TrackListScreen {
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
   @Event onPlay: (tracks: MusicTrack[], index: number) => void = (_: MusicTrack[], __: number): void => {};
+  @Event onPlayAll: (sortMode: TrackSortMode, shuffle: boolean) => void =
+    (_: TrackSortMode, __: boolean): void => {};
+  @Event onLoadMore: () => void = (): void => {};
   @Event onFavorite: (track: MusicTrack, favorite: boolean) => void =
     (_: MusicTrack, __: boolean): void => {};
   @Event onTrackMore: (track: MusicTrack, canRemove: boolean) => void = (_: MusicTrack, __: boolean): void => {};
@@ -341,17 +415,43 @@ export struct TrackListScreen {
   private visibleTotal(): number {
     const tracks = this.visibleTracks();
     if (this.usesRuntimeLibrary()) return Math.max(this.runtimeState.trackTotal, tracks.length);
-    if (this.collectionId === CollectionKind.ALBUM) return Math.max(this.album.trackCount, tracks.length);
-    if (this.collectionId === CollectionKind.ARTIST) return Math.max(this.artist.trackCount, tracks.length);
-    if (this.collectionId === CollectionKind.GENRE) return Math.max(this.genre.trackCount, tracks.length);
-    if (this.collectionId === CollectionKind.PLAYLIST) return Math.max(this.playlist.trackCount, tracks.length);
-    return tracks.length;
+    if (this.collectionId === CollectionKind.ALBUM) {
+      return Math.max(this.totalCount, this.album.trackCount, tracks.length);
+    }
+    if (this.collectionId === CollectionKind.ARTIST) {
+      return Math.max(this.totalCount, this.artist.trackCount, tracks.length);
+    }
+    if (this.collectionId === CollectionKind.GENRE) {
+      return Math.max(this.totalCount, this.genre.trackCount, tracks.length);
+    }
+    if (this.collectionId === CollectionKind.PLAYLIST) {
+      return Math.max(this.totalCount, this.playlist.trackCount, tracks.length);
+    }
+    return Math.max(this.totalCount, tracks.length);
   }
 
   private loadMore(): void {
     if (this.usesRuntimeLibrary()) {
       AppRuntime.loadMoreTracks().catch((): void => {});
+      return;
     }
+    this.onLoadMore();
+  }
+
+  private pagingHasMore(): boolean {
+    return this.usesRuntimeLibrary() ? this.runtimeState.tracksHasMore : this.hasMore;
+  }
+
+  private pagingLoading(): boolean {
+    return this.usesRuntimeLibrary() ? this.runtimeState.tracksLoadingMore : this.loadingMore;
+  }
+
+  private pagingError(): string {
+    return this.usesRuntimeLibrary() ? this.runtimeState.tracksLoadMoreError : this.loadMoreError;
+  }
+
+  private pagingFooterVisible(): boolean {
+    return this.pagingHasMore() || this.pagingLoading() || this.pagingError().length > 0;
   }
 
   private sortedTracks(): MusicTrack[] {
@@ -541,11 +641,6 @@ export struct TrackListScreen {
     return $r('app.color.page_catalog_background_end');
   }
 
-  private shuffleStartIndex(): number {
-    if (this.visibleTracks().length < 2) return 0;
-    return Math.floor(Math.random() * this.visibleTracks().length);
-  }
-
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       if (this.isImageDetailCollection()) {
@@ -571,10 +666,8 @@ export struct TrackListScreen {
                   trackCount: this.visibleTotal(),
                   loadedCount: this.visibleTracks().length,
                   safeTop: this.safeTop,
-                  onShuffle: (): void => {
-                    const tracks = this.sortedTracks();
-                    if (tracks.length > 0) this.onPlay(tracks, this.shuffleStartIndex());
-                  },
+                  shuffleLoading: this.playAllShuffleLoading,
+                  onShuffle: (): void => this.onPlayAll(this.sortMode, true),
                   onManage: (): void => this.onPageMore()
                 })
               }
@@ -613,10 +706,8 @@ export struct TrackListScreen {
                   Row() {
                     CollectionActionRow({
                       count: this.visibleTotal(),
-                      onPlayAll: (): void => {
-                        const tracks = this.sortedTracks();
-                        if (tracks.length > 0) this.onPlay(tracks, 0);
-                      },
+                      loading: this.playAllLoading && !this.playAllShuffleLoading,
+                      onPlayAll: (): void => this.onPlayAll(this.sortMode, false),
                       onMore: (): void => this.requestSort()
                     })
                   }
@@ -641,6 +732,9 @@ export struct TrackListScreen {
                       totalCount: this.visibleTotal(),
                       loading: this.loading,
                       errorMessage: this.errorMessage,
+                      hasMore: this.pagingHasMore(),
+                      loadingMore: this.pagingLoading(),
+                      loadMoreError: this.pagingError(),
                       bottomInset: this.bottomInset,
                       showActionRow: false,
                       showIndex: false,
@@ -656,7 +750,8 @@ export struct TrackListScreen {
                         this.onFavorite(track, favorite),
                       onTrackMore: (track: MusicTrack, canRemove: boolean): void =>
                         this.onTrackMore(track, canRemove),
-                      onSort: (): void => this.requestSort()
+                      onSort: (): void => this.requestSort(),
+                      onLoadMore: (): void => this.loadMore()
                     })
                   }
                 }
@@ -678,10 +773,8 @@ export struct TrackListScreen {
                   } else {
                     CollectionActionRow({
                       count: this.visibleTotal(),
-                      onPlayAll: (): void => {
-                        const tracks = this.sortedTracks();
-                        if (tracks.length > 0) this.onPlay(tracks, 0);
-                      },
+                      loading: this.playAllLoading && !this.playAllShuffleLoading,
+                      onPlayAll: (): void => this.onPlayAll(this.sortMode, false),
                       onMore: (): void => this.requestSort()
                     })
                   }
@@ -698,6 +791,9 @@ export struct TrackListScreen {
                     totalCount: this.visibleTotal(),
                     loading: this.loading,
                     errorMessage: this.errorMessage,
+                    hasMore: this.pagingHasMore(),
+                    loadingMore: this.pagingLoading(),
+                    loadMoreError: this.pagingError(),
                     bottomInset: this.bottomInset,
                     showActionRow: false,
                     showIndex: this.collectionId === CollectionKind.ALBUM,
@@ -717,7 +813,8 @@ export struct TrackListScreen {
                     onTrackMore: (track: MusicTrack, canRemove: boolean): void =>
                       this.onTrackMore(track, canRemove),
                     onToggleSelection: (track: MusicTrack): void => this.togglePlaylistTrack(track),
-                    onSort: (): void => this.requestSort()
+                    onSort: (): void => this.requestSort(),
+                    onLoadMore: (): void => this.loadMore()
                   })
                 }
                 .width('100%')
@@ -770,8 +867,10 @@ export struct TrackListScreen {
                 collectionId: this.collectionId,
                 loadedCount: this.visibleTracks().length,
                 showShuffle: this.showShuffle(),
-                onPlayAll: (): void => this.onPlay(this.visibleTracks(), 0),
-                onShuffle: (): void => this.onPlay(this.visibleTracks(), this.shuffleStartIndex())
+                playAllLoading: this.playAllLoading && !this.playAllShuffleLoading,
+                shuffleLoading: this.playAllShuffleLoading,
+                onPlayAll: (): void => this.onPlayAll(this.sortMode, false),
+                onShuffle: (): void => this.onPlayAll(this.sortMode, true)
               })
             }
           }
@@ -785,10 +884,17 @@ export struct TrackListScreen {
             Row({ space: FnMusicUI.compactGap }) {
               Button({ type: ButtonType.Normal, stateEffect: true }) {
                 Row({ space: 7 }) {
-                  SymbolGlyph($r('sys.symbol.shuffle'))
-                    .fontSize(17)
-                    .fontColor([$r('app.color.accent_contrast')])
-                  Text('随机漫游')
+                  if (this.playAllShuffleLoading) {
+                    LoadingProgress()
+                      .width(18)
+                      .height(18)
+                      .color($r('app.color.accent_contrast'))
+                  } else {
+                    SymbolGlyph($r('sys.symbol.shuffle'))
+                      .fontSize(17)
+                      .fontColor([$r('app.color.accent_contrast')])
+                  }
+                  Text(this.playAllShuffleLoading ? '正在加载' : '随机漫游')
                     .fontSize(FnMusicUI.bodySize)
                     .fontWeight(FontWeight.Medium)
                     .fontColor($r('app.color.accent_contrast'))
@@ -798,8 +904,8 @@ export struct TrackListScreen {
               .height(FnMusicUI.actionHeight)
               .borderRadius(FnMusicUI.actionHeight / 2)
               .backgroundColor($r('app.color.accent'))
-              .enabled(this.visibleTracks().length > 0)
-              .onClick((): void => this.onPlay(this.visibleTracks(), this.shuffleStartIndex()))
+              .enabled(this.visibleTracks().length > 0 && !this.playAllLoading)
+              .onClick((): void => this.onPlayAll(this.sortMode, true))
             }
             .width('100%')
           }
@@ -843,10 +949,8 @@ export struct TrackListScreen {
               if (this.collectionId === CollectionKind.ARTIST) {
                 CollectionActionRow({
                   count: this.visibleTotal(),
-                  onPlayAll: (): void => {
-                    const tracks = this.sortedTracks();
-                    if (tracks.length > 0) this.onPlay(tracks, 0);
-                  },
+                  loading: this.playAllLoading && !this.playAllShuffleLoading,
+                  onPlayAll: (): void => this.onPlayAll(this.sortMode, false),
                   onMore: (): void => this.cycleSortMode()
                 })
               } else if (this.collectionId === CollectionKind.LIBRARY) {
@@ -949,40 +1053,16 @@ export struct TrackListScreen {
             }
           }
 
-          if (this.usesRuntimeLibrary()) {
+          if (this.pagingFooterVisible()) {
             ListItem() {
-              Column({ space: FnMusicUI.compactGap }) {
-                if (this.runtimeState.tracksLoadingMore) {
-                  LoadingProgress()
-                    .width(24)
-                    .height(24)
-                    .color($r('app.color.accent'))
-                  Text('正在加载更多')
-                    .fontSize(FnMusicUI.supportingSize)
-                    .fontColor($r('app.color.text_secondary'))
-                } else if (this.runtimeState.tracksLoadMoreError.length > 0) {
-                  Text(this.runtimeState.tracksLoadMoreError)
-                    .fontSize(FnMusicUI.supportingSize)
-                    .fontColor($r('app.color.text_secondary'))
-                    .maxLines(2)
-                    .textAlign(TextAlign.Center)
-                  Button('重试加载')
-                    .height(36)
-                    .fontSize(FnMusicUI.supportingSize)
-                    .fontColor($r('app.color.accent'))
-                    .backgroundColor($r('app.color.surface_secondary'))
-                    .borderRadius(FnMusicUI.controlRadius)
-                    .onClick((): void => this.loadMore())
-                } else if (this.runtimeState.tracksHasMore) {
-                  Text(`已加载 ${this.visibleTracks().length} / 共 ${this.visibleTotal()}`)
-                    .fontSize(FnMusicUI.supportingSize)
-                    .fontColor($r('app.color.text_secondary'))
-                }
-              }
-              .width('100%')
-              .height(this.runtimeState.tracksLoadMoreError.length > 0 ? 96 :
-                (this.runtimeState.tracksLoadingMore || this.runtimeState.tracksHasMore ? 64 : 0))
-              .justifyContent(FlexAlign.Center)
+              TrackPagingFooter({
+                loaded: this.visibleTracks().length,
+                total: this.visibleTotal(),
+                hasMore: this.pagingHasMore(),
+                loading: this.pagingLoading(),
+                errorMessage: this.pagingError(),
+                onRetry: (): void => this.loadMore()
+              })
             }
             .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
           }

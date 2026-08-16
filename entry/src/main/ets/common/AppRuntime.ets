@@ -12,7 +12,8 @@ import {
   MusicPlaylist,
   MusicRoamResult,
   MusicTrack,
-  MusicUser
+  MusicUser,
+  PageResult
 } from '../model/MusicModels';
 import { FeiniuMusicApi } from '../network/FeiniuMusicApi';
 import { MusicPlaybackController } from '../playback/MusicPlaybackController';
@@ -55,6 +56,7 @@ export class AppRuntimeState {
 /** Owns the authenticated API session shared by the entry page, screens and audio player. */
 export class AppRuntime {
   private static readonly catalogPageSize: number = 100;
+  private static readonly allTracksPageSize: number = -1;
   private static readonly homeRecentSize: number = 10;
   private static readonly runtimeStateKey: string = 'FeiniuMusicRuntimeState';
   private static context?: common.UIAbilityContext;
@@ -68,6 +70,9 @@ export class AppRuntime {
   private static albumPage: number = 0;
   private static artistPage: number = 0;
   private static genrePage: number = 0;
+  private static allTrackCache: Map<string, MusicTrack[]> = new Map<string, MusicTrack[]>();
+  private static allTrackRequests: Map<string, Promise<MusicTrack[]>> = new Map<string, Promise<MusicTrack[]>>();
+  private static allTrackCacheRevision: number = 0;
 
   static state(): AppRuntimeState {
     return AppStorageV2.connect(AppRuntimeState, AppRuntime.runtimeStateKey, () => new AppRuntimeState())!;
@@ -167,6 +172,7 @@ export class AppRuntime {
 
   static async loadLibrary(): Promise<void> {
     AppRuntime.ensureInitialized();
+    AppRuntime.clearAllTrackCache();
     const auth = AppRuntime.auth!;
     const generation = auth.sessionGeneration();
     if (!auth.isSessionActive(generation)) {
@@ -401,6 +407,10 @@ export class AppRuntime {
 
   static async setFavorite(track: MusicTrack, favorite: boolean): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.setFavorite(track.guid, favorite));
+    AppRuntime.invalidateAllTrackCache('favorites');
+    AppRuntime.allTrackCache.forEach((cachedTracks: MusicTrack[]): void => {
+      AppRuntime.updateFavorite(cachedTracks, track.guid, favorite);
+    });
     track.isFavorite = favorite;
     const state = AppRuntime.state();
     AppRuntime.updateFavorite(state.tracks, track.guid, favorite);
@@ -412,31 +422,106 @@ export class AppRuntime {
   }
 
   static async favoriteTracks(): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.favoriteTracks())).list;
+    return (await AppRuntime.favoriteTracksPage()).list;
+  }
+
+  static async favoriteTracksPage(page: number = 1, size: number = 100): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.favoriteTracks(page, size));
+  }
+
+  static async favoriteTracksAll(loadedTracks: MusicTrack[] = [], total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks('favorites', loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.favoriteTracks(1, AppRuntime.allTracksPageSize));
   }
 
   static async playHistory(): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.playHistory())).list;
+    return (await AppRuntime.playHistoryPage()).list;
+  }
+
+  static async playHistoryPage(page: number = 1, size: number = 100): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.playHistory(page, size));
+  }
+
+  static async playHistoryAll(loadedTracks: MusicTrack[] = [], total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks('history', loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.playHistory(1, AppRuntime.allTracksPageSize));
   }
 
   static async deletePlayHistory(trackGuids: string[]): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.deletePlayHistory(trackGuids));
+    AppRuntime.invalidateAllTrackCache('history');
   }
 
   static async albumTracks(guid: string): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.albumTracks(guid))).list;
+    return (await AppRuntime.albumTracksPage(guid)).list;
+  }
+
+  static async albumTracksPage(guid: string, page: number = 1,
+    size: number = 120): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.albumTracks(guid, page, size));
+  }
+
+  static async albumTracksAll(guid: string, loadedTracks: MusicTrack[] = [],
+    total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks(`album:${guid}`, loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.albumTracks(guid, 1, AppRuntime.allTracksPageSize));
   }
 
   static async artistTracks(guid: string): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.artistTracks(guid))).list;
+    return (await AppRuntime.artistTracksPage(guid)).list;
+  }
+
+  static async artistTracksPage(guid: string, page: number = 1,
+    size: number = 120): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.artistTracks(guid, page, size));
+  }
+
+  static async artistTracksAll(guid: string, loadedTracks: MusicTrack[] = [],
+    total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks(`artist:${guid}`, loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.artistTracks(guid, 1, AppRuntime.allTracksPageSize));
   }
 
   static async genreTracks(guid: string): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.genreTracks(guid))).list;
+    return (await AppRuntime.genreTracksPage(guid)).list;
+  }
+
+  static async genreTracksPage(guid: string, page: number = 1,
+    size: number = 120): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.genreTracks(guid, page, size));
+  }
+
+  static async genreTracksAll(guid: string, loadedTracks: MusicTrack[] = [],
+    total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks(`genre:${guid}`, loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.genreTracks(guid, 1, AppRuntime.allTracksPageSize));
   }
 
   static async playlistTracks(guid: string): Promise<MusicTrack[]> {
-    return (await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.playlistTracks(guid))).list;
+    return (await AppRuntime.playlistTracksPage(guid)).list;
+  }
+
+  static async playlistTracksPage(guid: string, page: number = 1,
+    size: number = 300): Promise<PageResult<MusicTrack>> {
+    return await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.playlistTracks(guid, page, size));
+  }
+
+  static async playlistTracksAll(guid: string, loadedTracks: MusicTrack[] = [],
+    total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks(`playlist:${guid}`, loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.playlistTracks(guid, 1, AppRuntime.allTracksPageSize));
+  }
+
+  static async libraryTracksAll(loadedTracks: MusicTrack[] = [], total: number = 0): Promise<MusicTrack[]> {
+    return await AppRuntime.loadAllTracks('library', loadedTracks, total,
+      (): Promise<PageResult<MusicTrack>> =>
+        AppRuntime.api.tracks(1, AppRuntime.allTracksPageSize, 'createdAt,desc'));
   }
 
   static async trackMetadata(guid: string): Promise<MusicTrack> {
@@ -496,6 +581,7 @@ export class AppRuntime {
 
   static async deletePlaylist(playlist: MusicPlaylist): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.deletePlaylist(playlist.guid));
+    AppRuntime.invalidateAllTrackCache(`playlist:${playlist.guid}`);
     AppRuntime.state().playlists = AppRuntime.state().playlists.filter((item: MusicPlaylist): boolean =>
       item.guid !== playlist.guid);
   }
@@ -503,11 +589,13 @@ export class AppRuntime {
   static async addTrackToPlaylist(playlistGuid: string, trackGuid: string): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() =>
       AppRuntime.api.addTracksToPlaylist(playlistGuid, [trackGuid]));
+    AppRuntime.invalidateAllTrackCache(`playlist:${playlistGuid}`);
   }
 
   static async removeTrackFromPlaylist(playlistGuid: string, trackGuid: string): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() =>
       AppRuntime.api.removeTracksFromPlaylist(playlistGuid, [trackGuid]));
+    AppRuntime.invalidateAllTrackCache(`playlist:${playlistGuid}`);
   }
 
   static async removeTracksFromPlaylist(playlistGuid: string, trackGuids: string[]): Promise<void> {
@@ -516,6 +604,7 @@ export class AppRuntime {
     }
     await AppRuntime.authStore().withAutoReconnect(() =>
       AppRuntime.api.removeTracksFromPlaylist(playlistGuid, trackGuids));
+    AppRuntime.invalidateAllTrackCache(`playlist:${playlistGuid}`);
   }
 
   static streamUrl(trackGuid: string): string {
@@ -533,6 +622,7 @@ export class AppRuntime {
   static async reportTrackPlay(trackGuid: string): Promise<void> {
     try {
       await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.reportTrackPlay(trackGuid));
+      AppRuntime.invalidateAllTrackCache('history');
     } catch (_) {
       // Playback reporting is best-effort and never interrupts listening.
     }
@@ -598,6 +688,58 @@ export class AppRuntime {
     });
   }
 
+  private static async loadAllTracks(cacheKey: string, loadedTracks: MusicTrack[], total: number,
+    load: () => Promise<PageResult<MusicTrack>>): Promise<MusicTrack[]> {
+    const cached: MusicTrack[] | undefined = AppRuntime.allTrackCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached.slice();
+    }
+
+    const uniqueLoaded: MusicTrack[] = AppRuntime.appendUniqueTracks([], loadedTracks);
+    if (total > 0 && uniqueLoaded.length >= total) {
+      AppRuntime.allTrackCache.set(cacheKey, uniqueLoaded);
+      return uniqueLoaded.slice();
+    }
+
+    const pending: Promise<MusicTrack[]> | undefined = AppRuntime.allTrackRequests.get(cacheKey);
+    if (pending !== undefined) {
+      return (await pending).slice();
+    }
+
+    const request: Promise<MusicTrack[]> = AppRuntime.fetchAllTracks(load);
+    const cacheRevision: number = AppRuntime.allTrackCacheRevision;
+    AppRuntime.allTrackRequests.set(cacheKey, request);
+    try {
+      const tracks: MusicTrack[] = await request;
+      if (cacheRevision === AppRuntime.allTrackCacheRevision &&
+        AppRuntime.allTrackRequests.get(cacheKey) === request) {
+        AppRuntime.allTrackCache.set(cacheKey, tracks);
+      }
+      return tracks.slice();
+    } finally {
+      if (AppRuntime.allTrackRequests.get(cacheKey) === request) {
+        AppRuntime.allTrackRequests.delete(cacheKey);
+      }
+    }
+  }
+
+  private static async fetchAllTracks(load: () => Promise<PageResult<MusicTrack>>): Promise<MusicTrack[]> {
+    const result: PageResult<MusicTrack> = await AppRuntime.authStore().withAutoReconnect(load);
+    return AppRuntime.appendUniqueTracks([], result.list);
+  }
+
+  private static invalidateAllTrackCache(cacheKey: string): void {
+    AppRuntime.allTrackCacheRevision += 1;
+    AppRuntime.allTrackCache.delete(cacheKey);
+    AppRuntime.allTrackRequests.delete(cacheKey);
+  }
+
+  private static clearAllTrackCache(): void {
+    AppRuntime.allTrackCacheRevision += 1;
+    AppRuntime.allTrackCache.clear();
+    AppRuntime.allTrackRequests.clear();
+  }
+
   private static pageHasMore(loadedCount: number, total: number, lastPageCount: number = loadedCount): boolean {
     if (lastPageCount <= 0) {
       return false;
@@ -660,6 +802,7 @@ export class AppRuntime {
   }
 
   private static clearLibrary(): void {
+    AppRuntime.clearAllTrackCache();
     const state = AppRuntime.state();
     state.tracks = [];
     state.albums = [];

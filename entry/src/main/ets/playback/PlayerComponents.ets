@@ -327,11 +327,7 @@ struct QueuePanel {
       .borderRadius(23)
       .backgroundColor($r('app.color.surface_secondary'))
 
-      Text('播放来源：飞牛音乐')
-        .width('100%')
-        .fontSize(FnMusicUI.supportingSize)
-        .fontColor($r('app.color.text_secondary'))
-        .padding({ top: 16, bottom: 12 })
+      Blank().height(12)
 
       Row() {
         Button({ type: ButtonType.Normal, stateEffect: true }) {

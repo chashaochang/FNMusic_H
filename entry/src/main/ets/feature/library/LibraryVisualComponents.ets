@@ -307,24 +307,33 @@ export struct CollectionSegmentedSwitch {
 @ComponentV2
 export struct CollectionActionRow {
   @Param count: number = 0;
+  @Param loading: boolean = false;
   @Event onPlayAll: () => void = (): void => {};
   @Event onMore: () => void = (): void => {};
 
   build() {
     Row({ space: FnMusicUI.compactGap }) {
       Button({ type: ButtonType.Circle, stateEffect: true }) {
-        SymbolGlyph($r('sys.symbol.play_fill'))
-          .fontSize(16)
-          .fontColor([$r('app.color.accent_contrast')])
+        if (this.loading) {
+          LoadingProgress()
+            .width(18)
+            .height(18)
+            .color($r('app.color.accent_contrast'))
+        } else {
+          SymbolGlyph($r('sys.symbol.play_fill'))
+            .fontSize(16)
+            .fontColor([$r('app.color.accent_contrast')])
+        }
       }
       .width(40)
       .height(40)
       .backgroundColor($r('app.color.accent'))
-      .enabled(this.count > 0)
-      .accessibilityText(`播放全部 ${this.count} 首`)
+      .enabled(this.count > 0 && !this.loading)
+      .opacity(this.count > 0 ? 1 : 0.38)
+      .accessibilityText(this.loading ? '正在加载全部歌曲' : `播放全部 ${this.count} 首`)
       .onClick((): void => this.onPlayAll())
 
-      Text(`播放全部 ${this.count}`)
+      Text(this.loading ? '正在加载全部歌曲' : `播放全部 ${this.count}`)
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
@@ -339,6 +348,8 @@ export struct CollectionActionRow {
       .width(40)
       .height(40)
       .backgroundColor(Color.Transparent)
+      .enabled(!this.loading)
+      .opacity(this.loading ? 0.38 : 1)
       .accessibilityText('排序')
       .onClick((): void => this.onMore())
     }
@@ -1098,6 +1109,7 @@ export struct PlaylistDetailHero {
   @Param trackCount: number = 0;
   @Param loadedCount: number = 0;
   @Param safeTop: number = 0;
+  @Param shuffleLoading: boolean = false;
   @Local contentHeight: number = 0;
   @Event onShuffle: () => void = (): void => {};
   @Event onManage: () => void = (): void => {};
@@ -1181,10 +1193,17 @@ export struct PlaylistDetailHero {
         Row({ space: FnMusicUI.compactGap }) {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
             Row({ space: 7 }) {
-              SymbolGlyph($r('sys.symbol.shuffle'))
-                .fontSize(17)
-                .fontColor([$r('app.color.text_primary')])
-              Text('随机播放')
+              if (this.shuffleLoading) {
+                LoadingProgress()
+                  .width(18)
+                  .height(18)
+                  .color($r('app.color.text_primary'))
+              } else {
+                SymbolGlyph($r('sys.symbol.shuffle'))
+                  .fontSize(17)
+                  .fontColor([$r('app.color.text_primary')])
+              }
+              Text(this.shuffleLoading ? '正在加载' : '随机播放')
                 .fontSize(FnMusicUI.bodySize)
                 .fontWeight(FontWeight.Medium)
                 .fontColor($r('app.color.text_primary'))
@@ -1196,7 +1215,7 @@ export struct PlaylistDetailHero {
           .backgroundColor(Color.Transparent)
           .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .opacity(this.loadedCount > 0 ? 1 : 0.38)
-          .enabled(this.loadedCount > 0)
+          .enabled(this.loadedCount > 0 && !this.shuffleLoading)
           .onClick((): void => this.onShuffle())
 
           Button({ type: ButtonType.Normal, stateEffect: true }) {
@@ -1257,6 +1276,8 @@ export struct MusicDetailHero {
   @Param collectionId: string = '';
   @Param loadedCount: number = 0;
   @Param showShuffle: boolean = true;
+  @Param playAllLoading: boolean = false;
+  @Param shuffleLoading: boolean = false;
   @Event onPlayAll: () => void = (): void => {};
   @Event onShuffle: () => void = (): void => {};
 
@@ -1306,10 +1327,17 @@ export struct MusicDetailHero {
       Row({ space: FnMusicUI.compactGap }) {
         Button({ type: ButtonType.Normal, stateEffect: true }) {
           Row({ space: 7 }) {
-            SymbolGlyph($r('sys.symbol.play_fill'))
-              .fontSize(17)
-              .fontColor([$r('app.color.text_primary')])
-            Text('播放全部')
+            if (this.playAllLoading) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color($r('app.color.text_primary'))
+            } else {
+              SymbolGlyph($r('sys.symbol.play_fill'))
+                .fontSize(17)
+                .fontColor([$r('app.color.text_primary')])
+            }
+            Text(this.playAllLoading ? '正在加载' : '播放全部')
               .fontSize(FnMusicUI.bodySize)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
@@ -1321,21 +1349,29 @@ export struct MusicDetailHero {
         .backgroundColor(Color.Transparent)
         .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .opacity(this.loadedCount > 0 ? 1 : 0.38)
-        .enabled(this.loadedCount > 0)
+        .enabled(this.loadedCount > 0 && !this.playAllLoading && !this.shuffleLoading)
         .onClick((): void => this.onPlayAll())
 
         if (this.showShuffle) {
           Button({ type: ButtonType.Circle, stateEffect: true }) {
-            SymbolGlyph($r('sys.symbol.shuffle'))
-              .fontSize(19)
-              .fontColor([$r('app.color.text_primary')])
+            if (this.shuffleLoading) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color($r('app.color.text_primary'))
+            } else {
+              SymbolGlyph($r('sys.symbol.shuffle'))
+                .fontSize(19)
+                .fontColor([$r('app.color.text_primary')])
+            }
           }
           .width(FnMusicUI.actionHeight)
           .height(FnMusicUI.actionHeight)
           .backgroundColor(Color.Transparent)
           .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
-          .enabled(this.loadedCount > 0)
-          .accessibilityText('随机播放')
+          .enabled(this.loadedCount > 0 && !this.playAllLoading && !this.shuffleLoading)
+          .opacity(this.loadedCount > 0 && !this.playAllLoading ? 1 : 0.38)
+          .accessibilityText(this.shuffleLoading ? '正在随机加载全部歌曲' : '随机播放')
           .onClick((): void => this.onShuffle())
         }
       }
