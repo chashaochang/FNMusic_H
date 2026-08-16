@@ -67,9 +67,11 @@ export class MusicPlaybackController {
       .then((): void => {
         this.syncSession();
         if (MusicPreferenceStore.state().desktopLyricsEnabled) {
-          this.session.setDesktopLyricEnabled(true).catch((): void => {
-            MusicPreferenceStore.setDesktopLyricsEnabled(false);
-          });
+          this.enqueueSessionLyrics()
+            .then((): Promise<void> => this.session.setDesktopLyricEnabled(true))
+            .catch((): void => {
+              MusicPreferenceStore.setDesktopLyricsEnabled(false);
+            });
         }
       })
       .catch((): void => {});
@@ -97,6 +99,9 @@ export class MusicPlaybackController {
   }
 
   async setDesktopLyricEnabled(enabled: boolean): Promise<void> {
+    if (enabled) {
+      await this.enqueueSessionLyrics();
+    }
     await this.session.setDesktopLyricEnabled(enabled);
   }
 
@@ -476,7 +481,9 @@ export class MusicPlaybackController {
         return;
       }
       this.playbackState.positionMs = this.clampPosition(positionMs);
-      this.updateActiveLyric();
+      if (this.updateActiveLyric()) {
+        this.syncSessionLyrics();
+      }
       this.persistPositionIfNeeded();
     });
     player.on('durationUpdate', (durationMs: number): void => {
@@ -532,7 +539,9 @@ export class MusicPlaybackController {
       const durationMs: number = Math.max(1000, this.playbackState.durationMs);
       this.playbackState.positionMs = Math.min(durationMs, this.playbackState.positionMs + 250);
       this.playbackState.bufferedMs = durationMs;
-      this.updateActiveLyric();
+      if (this.updateActiveLyric()) {
+        this.syncSessionLyrics();
+      }
       this.persistPositionIfNeeded();
       if (this.playbackState.positionMs >= durationMs) {
         this.stopDemoTimer();
@@ -555,6 +564,7 @@ export class MusicPlaybackController {
       this.playbackState.activeLyricIndex = -1;
       this.playbackState.lyricStatus = LyricLoadStatus.IDLE;
       this.playbackState.lyricErrorMessage = '';
+      this.syncSessionLyrics();
       return;
     }
     if (generation === this.generation) {
@@ -565,6 +575,7 @@ export class MusicPlaybackController {
       this.playbackState.lyricLines = this.lyricsController.demo(track);
       this.playbackState.lyricStatus = LyricLoadStatus.READY;
       this.updateActiveLyric();
+      this.syncSessionLyrics();
       return;
     }
     try {
@@ -575,6 +586,7 @@ export class MusicPlaybackController {
           LyricLoadStatus.READY : LyricLoadStatus.EMPTY;
         this.playbackState.lyricErrorMessage = '';
         this.updateActiveLyric();
+        this.syncSessionLyrics();
       }
     } catch (error) {
       if (generation === this.generation) {
@@ -582,6 +594,7 @@ export class MusicPlaybackController {
         this.playbackState.activeLyricIndex = -1;
         this.playbackState.lyricStatus = LyricLoadStatus.ERROR;
         this.playbackState.lyricErrorMessage = (error as Error).message ?? '歌词读取失败';
+        this.syncSessionLyrics();
       }
     }
   }
@@ -699,11 +712,14 @@ export class MusicPlaybackController {
     await player.release();
   }
 
-  private updateActiveLyric(): void {
-    this.playbackState.activeLyricIndex = this.lyricsController.activeIndex(
+  private updateActiveLyric(): boolean {
+    const previousIndex: number = this.playbackState.activeLyricIndex;
+    const nextIndex: number = this.lyricsController.activeIndex(
       this.playbackState.lyricLines,
       this.playbackState.positionMs + 360
     );
+    this.playbackState.activeLyricIndex = nextIndex;
+    return previousIndex !== nextIndex;
   }
 
   private syncSession(): void {
@@ -719,6 +735,20 @@ export class MusicPlaybackController {
     const expectedAssetId: string = track?.guid ?? '';
     this.sessionChain = this.sessionChain.then((): Promise<void> =>
       this.session.sync(this.playbackState, expectedAssetId, coverUrl, coverHeaders)).catch((): void => {});
+  }
+
+  private syncSessionLyrics(): void {
+    this.enqueueSessionLyrics();
+  }
+
+  private enqueueSessionLyrics(): Promise<void> {
+    if (!this.initialized) {
+      return Promise.resolve();
+    }
+    const expectedAssetId: string = this.playbackState.currentTrack()?.guid ?? '';
+    this.sessionChain = this.sessionChain.then((): Promise<void> =>
+      this.session.syncLyrics(this.playbackState, expectedAssetId)).catch((): void => {});
+    return this.sessionChain;
   }
 
   saveSession(): void {

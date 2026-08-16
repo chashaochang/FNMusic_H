@@ -1,5 +1,9 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { MusicLyrics, MusicLyricsResult, MusicTrack } from '../main/ets/model/MusicModels';
+import {
+  activeAvSessionLyricText,
+  avSessionLyrics
+} from '../main/ets/playback/AvSessionLyricPolicy';
 import { LyricsController } from '../main/ets/playback/LyricsController';
 import { PlaybackQueue } from '../main/ets/playback/PlaybackQueue';
 import { LyricLine, PlaybackRepeatMode } from '../main/ets/playback/PlayerPresentationStore';
@@ -64,6 +68,17 @@ export default function playbackContractTest(): void {
       expect(desktopLyricErrorMessage(6600111)).assertEqual('当前设备不支持系统歌词');
       expect(desktopLyricErrorMessage(6600110)).assertEqual('系统歌词尚未启用');
       expect(desktopLyricErrorMessage(1)).assertEqual('系统歌词设置失败');
+    });
+
+    it('formatsStandardAvSessionLyricsAndCurrentLine', 0, () => {
+      const lines: LyricLine[] = [
+        new LyricLine(-100, '序曲'),
+        new LyricLine(61520, '  第二句  ')
+      ];
+      expect(avSessionLyrics(lines)).assertEqual('[00:00.00]序曲\n[01:01.52]  第二句  ');
+      expect(activeAvSessionLyricText(lines, -1)).assertEqual('');
+      expect(activeAvSessionLyricText(lines, 1)).assertEqual('第二句');
+      expect(activeAvSessionLyricText(lines, 2)).assertEqual('');
     });
 
     it('keepsLyricPreviewIndexInsideBounds', 0, () => {

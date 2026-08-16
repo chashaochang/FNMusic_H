@@ -3,6 +3,7 @@ import { avSession } from '@kit.AVSessionKit';
 import { image } from '@kit.ImageKit';
 import { http } from '@kit.NetworkKit';
 import { MusicTrack } from '../model/MusicModels';
+import { activeAvSessionLyricText, avSessionLyrics } from './AvSessionLyricPolicy';
 import { PlaybackRepeatMode, PlaybackStatus, PlayerPresentationState } from './PlayerPresentationStore';
 
 export interface AvSessionCallbacks {
@@ -24,6 +25,7 @@ export class AvSessionBridge {
   private artworkUrl: string = '';
   private artwork?: image.PixelMap;
   private artworkEpoch: number = 0;
+  private metadata?: avSession.AVMetadata;
 
   private readonly playListener = (): void => this.callbacks?.onPlay();
   private readonly pauseListener = (): void => this.callbacks?.onPause();
@@ -70,28 +72,12 @@ export class AvSessionBridge {
     if (track === undefined || track.guid !== expectedAssetId) {
       return;
     }
-    const metadata: avSession.AVMetadata = {
-      assetId: track.guid,
-      title: track.title,
-      artist: track.artistName,
-      album: track.albumName,
-      duration: Math.max(0, state.durationMs),
-      lyric: state.lyricLines.map((line): string => `[${Math.floor(line.timeMs / 60000)}:${
-        `${Math.floor((line.timeMs % 60000) / 1000)}`.padStart(2, '0')}]${line.text}`).join('\n')
-    };
-    if (artwork !== undefined) {
-      metadata.mediaImage = artwork;
-    }
     const previous: MusicTrack | undefined = state.currentIndex > 0 ? state.queue[state.currentIndex - 1] : undefined;
     const next: MusicTrack | undefined = state.currentIndex + 1 < state.queue.length ?
       state.queue[state.currentIndex + 1] : undefined;
-    if (previous !== undefined) {
-      metadata.previousAssetId = previous.guid;
-    }
-    if (next !== undefined) {
-      metadata.nextAssetId = next.guid;
-    }
+    const metadata: avSession.AVMetadata = this.createMetadata(state, track, artwork, previous, next);
     await session.setAVMetadata(metadata);
+    this.metadata = metadata;
     const items: avSession.AVQueueItem[] = state.queue.map((item: MusicTrack, index: number): avSession.AVQueueItem => ({
       itemId: index,
       description: {
@@ -123,6 +109,20 @@ export class AvSessionBridge {
       await session.activate();
       this.active = true;
     }
+  }
+
+  async syncLyrics(state: PlayerPresentationState, expectedAssetId: string = ''): Promise<void> {
+    await this.initialize();
+    const session: avSession.AVSession | undefined = this.session;
+    const track: MusicTrack | undefined = state.currentTrack();
+    const metadata: avSession.AVMetadata | undefined = this.metadata;
+    if (session === undefined || track === undefined || track.guid !== expectedAssetId ||
+      metadata === undefined || metadata.assetId !== expectedAssetId) {
+      return;
+    }
+    metadata.lyric = avSessionLyrics(state.lyricLines);
+    metadata.singleLyricText = activeAvSessionLyricText(state.lyricLines, state.activeLyricIndex);
+    await session.setAVMetadata(metadata);
   }
 
   async deactivate(): Promise<void> {
@@ -180,8 +180,33 @@ export class AvSessionBridge {
     if (this.session === session) {
       this.session = undefined;
     }
+    this.metadata = undefined;
     this.clearArtwork();
     this.active = false;
+  }
+
+  private createMetadata(state: PlayerPresentationState, track: MusicTrack,
+    artwork: image.PixelMap | undefined, previous: MusicTrack | undefined,
+    next: MusicTrack | undefined): avSession.AVMetadata {
+    const metadata: avSession.AVMetadata = {
+      assetId: track.guid,
+      title: track.title,
+      artist: track.artistName,
+      album: track.albumName,
+      duration: Math.max(0, state.durationMs),
+      lyric: avSessionLyrics(state.lyricLines),
+      singleLyricText: activeAvSessionLyricText(state.lyricLines, state.activeLyricIndex)
+    };
+    if (artwork !== undefined) {
+      metadata.mediaImage = artwork;
+    }
+    if (previous !== undefined) {
+      metadata.previousAssetId = previous.guid;
+    }
+    if (next !== undefined) {
+      metadata.nextAssetId = next.guid;
+    }
+    return metadata;
   }
 
   private async resolveArtwork(url: string, headers: Record<string, string>): Promise<image.PixelMap | undefined> {
