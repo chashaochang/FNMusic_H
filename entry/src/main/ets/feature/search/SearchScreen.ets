@@ -3,6 +3,7 @@ import { FnMusicMaterialRole, FnMusicMaterials } from '../../design/FnMusicMater
 import { MusicAlbum, MusicArtist, MusicTrack } from '../../model/MusicModels';
 import {
   EmptyMusicState,
+  MusicEmptyKind,
   MusicChipItem,
   MusicChipStrip
 } from '../common/MusicUiComponents';
@@ -52,7 +53,11 @@ struct SearchTrackResults {
   build() {
     Column() {
       if (this.tracks.length === 0) {
-        EmptyMusicState({ title: '没有找到歌曲', message: '换个关键词再试试。', symbol: $r('sys.symbol.magnifyingglass') })
+        EmptyMusicState({
+          kind: MusicEmptyKind.SEARCH,
+          title: '空空如也',
+          message: '没有找到歌曲，换个关键词再试试。'
+        })
       } else {
         Repeat<MusicTrack>(this.tracks)
           .each((repeatItem: RepeatItem<MusicTrack>): void => {
@@ -87,7 +92,11 @@ struct SearchAlbumResults {
 
   build() {
     if (this.albums.length === 0) {
-      EmptyMusicState({ title: '没有找到专辑', message: '换个关键词再试试。', symbol: $r('sys.symbol.magnifyingglass') })
+      EmptyMusicState({
+        kind: MusicEmptyKind.SEARCH,
+        title: '空空如也',
+        message: '没有找到专辑，换个关键词再试试。'
+      })
     } else {
       AlbumGrid({
         albums: this.albums,
@@ -106,7 +115,11 @@ struct SearchArtistResults {
   build() {
     Column() {
       if (this.artists.length === 0) {
-        EmptyMusicState({ title: '没有找到歌手', message: '换个关键词再试试。', symbol: $r('sys.symbol.magnifyingglass') })
+        EmptyMusicState({
+          kind: MusicEmptyKind.SEARCH,
+          title: '空空如也',
+          message: '没有找到歌手，换个关键词再试试。'
+        })
       } else {
         Repeat<MusicArtist>(this.artists)
           .each((repeatItem: RepeatItem<MusicArtist>): void => {
@@ -126,20 +139,54 @@ struct SearchArtistResults {
 }
 
 @ComponentV2
+struct SearchStartState {
+  build() {
+    Column({ space: FnMusicUI.compactGap }) {
+      Stack() {
+        SymbolGlyph($r('sys.symbol.magnifyingglass'))
+          .fontSize(FnMusicUI.searchStartIconSize)
+          .fontColor([$r('app.color.text_secondary')])
+      }
+      .width(FnMusicUI.searchStartIconContainerSize)
+      .height(FnMusicUI.searchStartIconContainerSize)
+      .borderRadius(FnMusicUI.searchStartIconContainerSize / 2)
+      .backgroundColor(Color.Transparent)
+      .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+
+      Text('输入关键词开始搜索')
+        .fontSize(FnMusicUI.bodySize)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+        .textAlign(TextAlign.Center)
+
+      Text('支持歌曲、专辑和歌手搜索')
+        .fontSize(FnMusicUI.supportingSize)
+        .fontColor($r('app.color.text_secondary'))
+        .textAlign(TextAlign.Center)
+    }
+    .width('100%')
+    .padding({ top: FnMusicUI.searchStartTopPadding, bottom: FnMusicUI.emptyBottomPadding })
+    .alignItems(HorizontalAlign.Center)
+  }
+}
+
+@ComponentV2
 struct RecentSearches {
   @Param searches: string[] = [];
   @Event onSelect: (value: string) => void = (_: string): void => {};
   @Event onClear: () => void = (): void => {};
 
   build() {
-    Column({ space: FnMusicUI.contentGap }) {
-      Row() {
-        Text('最近搜索')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-        Blank()
-        if (this.searches.length > 0) {
+    if (this.searches.length === 0) {
+      SearchStartState()
+    } else {
+      Column({ space: FnMusicUI.contentGap }) {
+        Row() {
+          Text('最近搜索')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Blank()
           Button('清空', { type: ButtonType.Normal })
             .height(36)
             .padding({ left: 12, right: 12 })
@@ -151,12 +198,8 @@ struct RecentSearches {
               this.onClear();
             })
         }
-      }
-      .width('100%')
+        .width('100%')
 
-      if (this.searches.length === 0) {
-        EmptyMusicState({ title: '还没有搜索记录', message: '搜索过的内容会留在这里。', symbol: $r('sys.symbol.magnifyingglass') })
-      } else {
         Flex({ direction: FlexDirection.Row, wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
           Repeat<string>(this.searches)
             .each((repeatItem: RepeatItem<string>): void => {
@@ -182,9 +225,9 @@ struct RecentSearches {
         }
         .width('100%')
       }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
     }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
   }
 }
 
@@ -343,9 +386,9 @@ export struct SearchScreen {
                 .justifyContent(FlexAlign.Center)
               } else if (this.errorMessage.length > 0) {
                 EmptyMusicState({
+                  kind: MusicEmptyKind.LOAD_FAILED,
                   title: '搜索失败',
-                  message: this.errorMessage,
-                  symbol: $r('sys.symbol.exclamationmark_circle_fill')
+                  message: this.errorMessage
                 })
               } else if (this.sectionState.selectedId === 'tracks') {
                 SearchTrackResults({

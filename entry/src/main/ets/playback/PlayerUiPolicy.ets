@@ -51,6 +51,10 @@ export function playerTrackInfoRows(track: MusicTrack): PlayerInfoRow[] {
   if (track.audioSpec.size > 0) {
     rows.push(new PlayerInfoRow('大小', formatBytes(track.audioSpec.size)));
   }
+  if (track.createdAt > 0) {
+    rows.push(new PlayerInfoRow('添加日期', formatTimestamp(track.createdAt)));
+  }
+  pushInfo(rows, '文件位置', track.audioSpec.path);
   return rows;
 }
 
@@ -95,4 +99,12 @@ function formatBytes(size: number): string {
   }
   const digits = unit === 0 ? Math.round(value) : Math.round(value * 10) / 10;
   return `${digits} ${units[unit]}`;
+}
+
+function formatTimestamp(value: number): string {
+  const timestampMs = value < 100000000000 ? value * 1000 : value;
+  const date = new Date(timestampMs);
+  const pad = (numberValue: number): string => numberValue < 10 ? `0${numberValue}` : `${numberValue}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

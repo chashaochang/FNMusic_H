@@ -16,6 +16,7 @@ struct StartupRecordLoading {
   @Local discOffsetY: number = 0;
   @Local discScale: number = 1;
   @Local discOpacity: number = 1;
+  @Local backdropOpacity: number = 1;
   @Local exitReady: boolean = false;
   @Event onComplete: () => void = (): void => {};
   private timers: number[] = [];
@@ -61,6 +62,7 @@ struct StartupRecordLoading {
       this.discOffsetY = -720;
       this.discScale = 1.14;
       this.discOpacity = 0.72;
+      this.backdropOpacity = 0;
     });
     this.timers.push(setTimeout((): void => {
       this.onComplete();
@@ -68,25 +70,36 @@ struct StartupRecordLoading {
   }
 
   build() {
-    Column({ space: 24 }) {
-      Image($r('app.media.login_record'))
-        .width(FnMusicLoginMetrics.introDiscSize)
-        .height(FnMusicLoginMetrics.introDiscSize)
-        .objectFit(ImageFit.Contain)
-        .rotate({ angle: this.discAngle })
-      Text(this.message)
-        .fontSize(FnMusicUI.bodySize)
-        .fontColor($r('app.color.login_text_secondary'))
+    Stack() {
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor($r('app.color.login_canvas'))
+        .opacity(this.backdropOpacity)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      Column({ space: 24 }) {
+        Image($r('app.media.login_record'))
+          .width(FnMusicLoginMetrics.introDiscSize)
+          .height(FnMusicLoginMetrics.introDiscSize)
+          .objectFit(ImageFit.Contain)
+          .rotate({ angle: this.discAngle })
+        Text(this.message)
+          .fontSize(FnMusicUI.bodySize)
+          .fontColor($r('app.color.login_text_secondary'))
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+      .scale({ x: this.discScale, y: this.discScale })
+      .translate({ y: this.discOffsetY })
+      .opacity(this.discOpacity)
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .scale({ x: this.discScale, y: this.discScale })
-    .translate({ y: this.discOffsetY })
-    .opacity(this.discOpacity)
-    .backgroundColor($r('app.color.login_canvas'))
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .hitTestBehavior(HitTestMode.Block)
   }
 }
 
@@ -125,7 +138,17 @@ struct Index {
 
   private signIn(credentials: LoginCredentials): void {
     CoverArtStore.clear();
-    AppRuntime.signIn(credentials).catch((): void => {});
+    this.startupOverlayActive = true;
+    this.startupOverlayVisible = true;
+    AppRuntime.signIn(credentials).then((authenticated: boolean): void => {
+      if (authenticated && this.runtime.phase === AuthPhase.AUTHENTICATED) {
+        this.startupOverlayActive = false;
+      } else {
+        this.startupOverlayVisible = false;
+      }
+    }).catch((): void => {
+      this.startupOverlayVisible = false;
+    });
   }
 
   private signOut(): void {

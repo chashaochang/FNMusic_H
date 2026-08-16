@@ -5,6 +5,7 @@ import { MusicPreferenceState, MusicPreferenceStore, connectMusicPreferenceState
 import { FnMusicUI } from '../design/FnMusicUI';
 import { FnMusicMaterialRole, FnMusicMaterials } from '../design/FnMusicMaterials';
 import { LengthMetrics } from '@kit.ArkUI';
+import { EmptyMusicState, MusicEmptyKind } from '../feature/common/MusicUiComponents';
 import { HomeScreen } from '../feature/home/HomeScreen';
 import { ProfileScreen } from '../feature/profile/ProfileScreen';
 import { SearchRequest, SearchScreen } from '../feature/search/SearchScreen';
@@ -16,7 +17,18 @@ import {
 } from '../feature/library/CollectionScreens';
 import { TrackActionsSheet } from '../feature/library/TrackActionsSheet';
 import { TrackListScreen } from '../feature/library/TrackListScreen';
-import { PlaylistEditMode, PlaylistEditSheet } from '../feature/playlist/PlaylistEditSheet';
+import {
+  PlaylistActionsSheet,
+  PlaylistSortKey,
+  PlaylistSortOrder,
+  PlaylistSortSheet
+} from '../feature/playlist/PlaylistDetailSheets';
+import {
+  PlaylistEditMode,
+  PlaylistEditRequest,
+  PlaylistEditSheet,
+  PlaylistSaveStage
+} from '../feature/playlist/PlaylistEditSheet';
 import { PlaylistScreen } from '../feature/playlist/PlaylistScreen';
 import {
   CollectionKind,
@@ -37,6 +49,7 @@ import {
   PlaybackQueueSheet,
   PlayerHostPlacement
 } from '../playback/PlayerComponents';
+import { TrackInfoSheet } from '../playback/PlayerTrackOverlays';
 import {
   ezCustomTransition,
   LongTakeSession,
@@ -401,10 +414,19 @@ export struct AppShell {
   @Local activeAlbum: MusicAlbum = new MusicAlbum();
   @Local activeArtist: MusicArtist = new MusicArtist();
   @Local activeGenre: MusicGenre = new MusicGenre();
+  @Local activeGenreVisualIndex: number = 0;
   @Local activePlaylist: MusicPlaylist = new MusicPlaylist();
   @Local showSettings: boolean = false;
   @Local showTrackActions: boolean = false;
   @Local canRemoveActiveTrack: boolean = false;
+  @Local showTrackInfo: boolean = false;
+  @Local trackInfoTrack: MusicTrack = new MusicTrack();
+  @Local showPlaylistActions: boolean = false;
+  @Local showPlaylistSort: boolean = false;
+  @Local playlistSelectionMode: boolean = false;
+  @Local playlistOperationBusy: boolean = false;
+  @Local playlistSortKey: PlaylistSortKey = PlaylistSortKey.ADDED_DATE;
+  @Local playlistSortOrder: PlaylistSortOrder = PlaylistSortOrder.DESCENDING;
   @Local showPlaylistEditor: boolean = false;
   @Local showPlaylistPicker: boolean = false;
   @Local playlistEditMode: PlaylistEditMode = PlaylistEditMode.CREATE;
@@ -695,6 +717,7 @@ export struct AppShell {
 
   private sheetVisible(): boolean {
     return this.playerState.queueVisible || this.showSettings || this.showTrackActions ||
+      this.showTrackInfo || this.showPlaylistActions || this.showPlaylistSort ||
       this.showPlaylistEditor || this.showPlaylistPicker;
   }
 
@@ -906,11 +929,19 @@ export struct AppShell {
     if (this.playback.dismissOverlay()) {
       return;
     }
-    if (this.showSettings || this.showTrackActions || this.showPlaylistEditor || this.showPlaylistPicker) {
+    if (this.showSettings || this.showTrackActions || this.showTrackInfo || this.showPlaylistActions ||
+      this.showPlaylistSort || this.showPlaylistEditor || this.showPlaylistPicker) {
       this.showSettings = false;
       this.showTrackActions = false;
+      this.showTrackInfo = false;
+      this.showPlaylistActions = false;
+      this.showPlaylistSort = false;
       this.showPlaylistEditor = false;
       this.showPlaylistPicker = false;
+      return;
+    }
+    if (this.playlistSelectionMode) {
+      this.playlistSelectionMode = false;
       return;
     }
     if (this.page === AppShellPage.ALBUM_DETAIL || this.page === AppShellPage.ARTIST_DETAIL ||
@@ -1026,6 +1057,8 @@ export struct AppShell {
   private openGenre(genre: MusicGenre): void {
     this.activeCollectionId = CollectionKind.GENRE;
     this.activeGenre = genre;
+    const genreIndex = this.genres().findIndex((item: MusicGenre): boolean => item.guid === genre.guid);
+    this.activeGenreVisualIndex = Math.max(0, genreIndex);
     this.pageTitle = genre.name;
     this.pageSubtitle = `${genre.trackCount} 首歌曲`;
     this.pageSymbol = $r('sys.symbol.music_badge_wave_2');
@@ -1040,6 +1073,10 @@ export struct AppShell {
   private openPlaylist(playlist: MusicPlaylist): void {
     this.activeCollectionId = CollectionKind.PLAYLIST;
     this.activePlaylist = playlist;
+    this.playlistSelectionMode = false;
+    this.playlistOperationBusy = false;
+    this.playlistSortKey = PlaylistSortKey.ADDED_DATE;
+    this.playlistSortOrder = PlaylistSortOrder.DESCENDING;
     this.pageTitle = playlist.name;
     this.pageSubtitle = playlist.description.length > 0 ? playlist.description : '自建歌单';
     this.pageSymbol = $r('sys.symbol.music_note_list');
@@ -1088,6 +1125,107 @@ export struct AppShell {
     this.activeTrack = track;
     this.canRemoveActiveTrack = canRemove;
     this.showTrackActions = true;
+  }
+
+  private showTrackInfoSheet(track: MusicTrack): void {
+    this.trackInfoTrack = track;
+    this.showTrackInfo = true;
+    if (this.runtime === undefined || track.guid.length === 0) {
+      return;
+    }
+    const guid = track.guid;
+    AppRuntime.trackMetadata(guid).then((metadata: MusicTrack): void => {
+      if (this.showTrackInfo && this.trackInfoTrack.guid === guid) {
+        this.trackInfoTrack = metadata;
+      }
+    }).catch((): void => {
+      // The list payload already contains the core metadata, so a detail fetch
+      // failure does not block the read-only information sheet.
+    });
+  }
+
+  private async appendSelectedTracksToQueue(tracks: MusicTrack[]): Promise<void> {
+    if (tracks.length === 0 || this.playlistOperationBusy) {
+      return;
+    }
+    this.playlistOperationBusy = true;
+    try {
+      for (const track of tracks) {
+        await this.playback.appendToQueue(track);
+      }
+      FnToast.show(`已将 ${tracks.length} 首歌曲加入播放列表`);
+    } catch (_) {
+      FnToast.show('暂时无法调整播放列表');
+    } finally {
+      this.playlistOperationBusy = false;
+    }
+  }
+
+  private async removeActivePlaylistTracks(tracks: MusicTrack[]): Promise<void> {
+    if (tracks.length === 0 || this.playlistOperationBusy) {
+      return;
+    }
+    const guids: string[] = tracks.map((track: MusicTrack): string => track.guid)
+      .filter((guid: string, index: number, values: string[]): boolean => guid.length > 0 && values.indexOf(guid) === index);
+    if (guids.length === 0) {
+      return;
+    }
+    this.playlistOperationBusy = true;
+    try {
+      if (this.runtime !== undefined) {
+        await AppRuntime.removeTracksFromPlaylist(this.activePlaylist.guid, guids);
+      }
+      this.activeTracks = this.activeTracks.filter((track: MusicTrack): boolean => !guids.includes(track.guid));
+      this.activePlaylist.trackCount = Math.max(0, this.activePlaylist.trackCount - guids.length);
+      if (this.runtime !== undefined) {
+        this.runtime.playlists = this.runtime.playlists.slice();
+      }
+      this.playlistSelectionMode = false;
+      FnToast.show(`已从歌单移除 ${guids.length} 首歌曲`);
+    } catch (error) {
+      FnToast.show((error as Error).message || '移出歌单失败');
+    } finally {
+      this.playlistOperationBusy = false;
+    }
+  }
+
+  private confirmRemovePlaylistTracks(tracks: MusicTrack[]): void {
+    if (tracks.length === 0) {
+      return;
+    }
+    this.getUIContext().getPromptAction().showDialog({
+      title: '移出歌单',
+      message: `确定从「${this.activePlaylist.name}」移出选中的 ${tracks.length} 首歌曲吗？`,
+      buttons: [
+        { text: '取消', color: $r('app.color.text_secondary') },
+        { text: '移出', color: $r('app.color.danger') }
+      ]
+    }).then((result): void => {
+      if (result.index === 1) {
+        this.removeActivePlaylistTracks(tracks).catch((): void => {});
+      }
+    }).catch((): void => {});
+  }
+
+  private clearUnavailablePlaylistTracks(): void {
+    const unavailable = this.activeTracks.filter((track: MusicTrack): boolean => track.isAudioFileDeleted);
+    this.showPlaylistActions = false;
+    if (unavailable.length === 0) {
+      FnToast.show('当前歌单没有失效歌曲');
+      return;
+    }
+    this.getUIContext().getPromptAction().showDialog({
+      title: '清除失效歌曲',
+      message: `将从歌单移除 ${unavailable.length} 首已经失效的歌曲，音乐文件不会被删除。`,
+      buttons: [
+        { text: '取消', color: $r('app.color.text_secondary') },
+        { text: '清除', color: $r('app.color.danger') }
+      ]
+    }).then((result): void => {
+      if (result.index === 1) {
+        this.removeActivePlaylistTracks(unavailable).catch((): void => {});
+      }
+    }).catch((): void => {});
   }
 
   private playTracks(tracks: MusicTrack[], index: number, continuousRoam: boolean = false): void {
@@ -1159,32 +1297,40 @@ export struct AppShell {
     });
   }
 
-  private async savePlaylist(name: string): Promise<void> {
+  private async savePlaylist(request: PlaylistEditRequest,
+    onStage: (stage: PlaylistSaveStage) => void): Promise<void> {
+    let coverId = request.coverId;
     if (this.runtime !== undefined) {
-      try {
-        if (this.playlistEditMode === PlaylistEditMode.CREATE) {
-          await AppRuntime.createPlaylist(name);
-        } else {
-          await AppRuntime.editPlaylist(this.activePlaylist, name);
-        }
-        this.showPlaylistEditor = false;
-        FnToast.show('歌单已保存');
-      } catch (error) {
-        FnToast.show((error as Error).message || '歌单保存失败');
+      if (request.coverBytes.length > 0) {
+        onStage(PlaylistSaveStage.UPLOADING);
+        coverId = await AppRuntime.uploadPlaylistCover(
+          request.coverBytes,
+          request.coverFileName,
+          request.coverMimeType
+        );
       }
+      onStage(PlaylistSaveStage.SAVING);
+      if (this.playlistEditMode === PlaylistEditMode.CREATE) {
+        await AppRuntime.createPlaylist(request.name, coverId);
+      } else {
+        await AppRuntime.editPlaylist(this.activePlaylist, request.name, coverId);
+      }
+      FnToast.show(this.playlistEditMode === PlaylistEditMode.CREATE ? '歌单已创建' : '歌单已保存');
       return;
     }
+    onStage(PlaylistSaveStage.SAVING);
     if (this.playlistEditMode === PlaylistEditMode.CREATE) {
-      const playlist: MusicPlaylist = new MusicPlaylist(`local-${this.nextLocalPlaylistId}`, name, 0);
+      const playlist: MusicPlaylist = new MusicPlaylist(`local-${this.nextLocalPlaylistId}`, request.name, 0);
+      playlist.coverId = coverId;
       this.nextLocalPlaylistId += 1;
       this.workingPlaylists = [playlist].concat(this.workingPlaylists);
     } else {
-      this.activePlaylist.name = name;
+      this.activePlaylist.name = request.name;
+      this.activePlaylist.coverId = coverId;
       this.workingPlaylists = this.workingPlaylists.map((playlist: MusicPlaylist): MusicPlaylist =>
         playlist.guid === this.activePlaylist.guid ? this.activePlaylist : playlist);
     }
-    this.showPlaylistEditor = false;
-    FnToast.show('歌单已保存');
+    FnToast.show(this.playlistEditMode === PlaylistEditMode.CREATE ? '歌单已创建' : '歌单已保存');
   }
 
   private async deletePlaylist(): Promise<void> {
@@ -1193,7 +1339,9 @@ export struct AppShell {
         await AppRuntime.deletePlaylist(this.activePlaylist);
         this.showPlaylistEditor = false;
         if (this.page === AppShellPage.PLAYLIST_DETAIL) {
-          this.page = AppShellPage.ROOT;
+          this.playlistSelectionMode = false;
+          this.pathStack.pop();
+          this.syncPageFromPathStack();
         }
         FnToast.show('歌单已删除');
       } catch (error) {
@@ -1205,7 +1353,9 @@ export struct AppShell {
       playlist.guid !== this.activePlaylist.guid);
     this.showPlaylistEditor = false;
     if (this.page === AppShellPage.PLAYLIST_DETAIL) {
-      this.page = AppShellPage.ROOT;
+      this.playlistSelectionMode = false;
+      this.pathStack.pop();
+      this.syncPageFromPathStack();
     }
     FnToast.show('歌单已删除');
   }
@@ -1278,8 +1428,9 @@ export struct AppShell {
   }
 
   public handleBack(): boolean {
-    if (this.showSettings || this.showTrackActions || this.showPlaylistEditor || this.showPlaylistPicker ||
-      this.page !== AppShellPage.ROOT) {
+    if (this.showSettings || this.showTrackActions || this.showTrackInfo || this.showPlaylistActions ||
+      this.showPlaylistSort || this.showPlaylistEditor || this.showPlaylistPicker ||
+      this.playlistSelectionMode || this.page !== AppShellPage.ROOT) {
       this.goBack();
       return true;
     }
@@ -1399,6 +1550,7 @@ export struct AppShell {
           album: this.activeAlbum,
           artist: this.activeArtist,
           genre: this.activeGenre,
+          genreVisualIndex: this.activeGenreVisualIndex,
           playlist: this.activePlaylist,
           symbol: this.pageSymbol,
           canRemoveFromPlaylist: name === AppShellPage.PLAYLIST_DETAIL,
@@ -1406,16 +1558,34 @@ export struct AppShell {
           bottomInset: this.bottomAvoidance(),
           loading: this.activeTracksLoading,
           errorMessage: this.activeTracksError,
+          playlistSortKey: this.playlistSortKey,
+          playlistSortOrder: this.playlistSortOrder,
+          playlistSelectionMode: this.playlistSelectionMode,
+          playlistOperationBusy: this.playlistOperationBusy,
           onBack: (): void => this.goBack(),
           onPlay: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
           onFavorite: (track: MusicTrack, favorite: boolean): void =>
             this.setTrackFavorite(track, favorite),
           onOpenAlbum: (album: MusicAlbum): void => this.openAlbumFromArtist(album),
           onTrackMore: (track: MusicTrack, canRemove: boolean): void => this.showTrackMenu(track, canRemove),
+          onRequestPlaylistSort: (): void => {
+            this.showPlaylistSort = true;
+          },
+          onPlaylistSelectionDone: (): void => {
+            this.playlistSelectionMode = false;
+          },
+          onPlaySelected: (tracks: MusicTrack[]): void => {
+            this.playTracks(tracks, 0);
+          },
+          onAddSelectedQueue: (tracks: MusicTrack[]): void => {
+            this.appendSelectedTracksToQueue(tracks).catch((): void => {});
+          },
+          onRemoveSelected: (tracks: MusicTrack[]): void => {
+            this.confirmRemovePlaylistTracks(tracks);
+          },
           onPageMore: (): void => {
             if (name === AppShellPage.PLAYLIST_DETAIL) {
-              this.playlistEditMode = PlaylistEditMode.EDIT;
-              this.showPlaylistEditor = true;
+              this.showPlaylistActions = true;
             } else {
               FnToast.development();
             }
@@ -1448,29 +1618,15 @@ export struct AppShell {
               .fontSize(FnMusicUI.bodySize)
               .fontColor($r('app.color.text_secondary'))
           } else {
-            SymbolGlyph($r('sys.symbol.exclamationmark_circle_fill'))
-              .fontSize(34)
-              .fontColor([$r('app.color.danger')])
-            Text('音乐库加载失败')
-              .fontSize(18)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            Text(this.runtime?.libraryError ?? '暂时无法读取服务器音乐库')
-              .width('calc(100% - 56vp)')
-              .fontSize(FnMusicUI.supportingSize)
-              .fontColor($r('app.color.text_secondary'))
-              .textAlign(TextAlign.Center)
-              .lineHeight(20)
-            Button('重新加载')
-              .height(FnMusicUI.actionHeight)
-              .padding({ left: 22, right: 22 })
-              .fontSize(FnMusicUI.bodySize)
-              .fontColor($r('app.color.accent_contrast'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(FnMusicUI.controlRadius)
-              .onClick((): void => {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LOAD_FAILED,
+              title: '音乐库加载失败',
+              message: this.runtime?.libraryError ?? '暂时无法读取服务器音乐库',
+              actionTitle: '重新加载',
+              onAction: (): void => {
                 AppRuntime.loadLibrary().catch((): void => {});
-              })
+              }
+            })
           }
         }
         .width('100%')
@@ -1590,6 +1746,10 @@ export struct AppShell {
           onClose: (): void => {
             this.showTrackActions = false;
           },
+          onPlay: (): void => {
+            this.showTrackActions = false;
+            this.playTracks([this.activeTrack], 0);
+          },
           onPlayNext: (): void => {
             this.showTrackActions = false;
             this.playback.playNext(this.activeTrack).then((): void => {
@@ -1670,8 +1830,66 @@ export struct AppShell {
             }).catch((error: Error): void => {
               FnToast.show(error.message || '移出歌单失败');
             });
+          },
+          onInfo: (): void => {
+            this.showTrackActions = false;
+            this.showTrackInfoSheet(this.activeTrack);
           }
         })
+      }
+
+      if (this.showTrackInfo) {
+        TrackInfoSheet({
+          track: this.trackInfoTrack,
+          onClose: (): void => {
+            this.showTrackInfo = false;
+          }
+        })
+        .zIndex(52)
+      }
+
+      if (this.showPlaylistSort) {
+        PlaylistSortSheet({
+          sortKey: this.playlistSortKey,
+          sortOrder: this.playlistSortOrder,
+          onClose: (): void => {
+            this.showPlaylistSort = false;
+          },
+          onSortKey: (key: PlaylistSortKey): void => {
+            this.playlistSortKey = key;
+          },
+          onSortOrder: (order: PlaylistSortOrder): void => {
+            this.playlistSortOrder = order;
+          }
+        })
+        .zIndex(52)
+      }
+
+      if (this.showPlaylistActions) {
+        PlaylistActionsSheet({
+          onClose: (): void => {
+            this.showPlaylistActions = false;
+          },
+          onMultiSelect: (): void => {
+            this.showPlaylistActions = false;
+            if (this.activeTracks.length === 0) {
+              FnToast.show('当前歌单还没有歌曲');
+              return;
+            }
+            this.playlistSelectionMode = true;
+          },
+          onClearUnavailable: (): void => this.clearUnavailablePlaylistTracks(),
+          onEdit: (): void => {
+            this.showPlaylistActions = false;
+            this.playlistEditMode = PlaylistEditMode.EDIT;
+            this.showPlaylistEditor = true;
+          },
+          onDelete: (): void => {
+            this.showPlaylistActions = false;
+            this.confirmDeletePlaylist();
+          }
+        })
+        .zIndex(52)
       }
 
       if (this.showPlaylistPicker) {
@@ -1773,8 +1991,9 @@ export struct AppShell {
           onClose: (): void => {
             this.showPlaylistEditor = false;
           },
-          onSave: (name: string): void => {
-            this.savePlaylist(name);
+          onSave: (request: PlaylistEditRequest,
+            onStage: (stage: PlaylistSaveStage) => void): Promise<void> => {
+            return this.savePlaylist(request, onStage);
           },
           onDelete: (): void => {
             this.confirmDeletePlaylist();

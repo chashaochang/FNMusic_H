@@ -11,6 +11,14 @@ import {
 } from '../../model/MusicModels';
 import { MusicArtwork, MusicChipItem, VerticalMoreDots } from '../common/MusicUiComponents';
 
+function genreLabelMedia(variantIndex: number): Resource {
+  const variant = Math.abs(variantIndex) % 4;
+  if (variant === 1) return $r('app.media.music_genre_label_orange');
+  if (variant === 2) return $r('app.media.music_genre_label_blue');
+  if (variant === 3) return $r('app.media.music_genre_label_purple');
+  return $r('app.media.music_genre_label_red');
+}
+
 @ComponentV2
 export struct AlbumGridItem {
   @Param album: MusicAlbum = new MusicAlbum();
@@ -261,19 +269,30 @@ export struct CollectionSegmentedSwitch {
     Row({ space: 4 }) {
       Repeat<MusicChipItem>(this.items)
         .each((repeatItem: RepeatItem<MusicChipItem>): void => {
-          Button({ type: ButtonType.Capsule, stateEffect: true }) {
-            Text(repeatItem.item.title)
-              .fontSize(FnMusicUI.bodySize)
-              .fontWeight(this.isSelected(repeatItem.item) ? FontWeight.Medium : FontWeight.Regular)
-              .fontColor(this.isSelected(repeatItem.item) ?
-                $r('app.color.detail_segment_selected_text') : $r('app.color.text_secondary'))
+          if (this.isSelected(repeatItem.item)) {
+            Button({ type: ButtonType.Capsule, stateEffect: true }) {
+              Text(repeatItem.item.title)
+                .fontSize(FnMusicUI.bodySize)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.detail_segment_selected_text'))
+            }
+            .layoutWeight(1)
+            .height(FnMusicUI.collectionSegmentHeight - 8)
+            .backgroundColor(Color.Transparent)
+            .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.DETAIL_SEGMENT_SELECTED))
+            .onClick((): void => this.onSelect(repeatItem.item.id))
+          } else {
+            Button({ type: ButtonType.Capsule, stateEffect: true }) {
+              Text(repeatItem.item.title)
+                .fontSize(FnMusicUI.bodySize)
+                .fontWeight(FontWeight.Regular)
+                .fontColor($r('app.color.text_secondary'))
+            }
+            .layoutWeight(1)
+            .height(FnMusicUI.collectionSegmentHeight - 8)
+            .backgroundColor(Color.Transparent)
+            .onClick((): void => this.onSelect(repeatItem.item.id))
           }
-          .layoutWeight(1)
-          .height(FnMusicUI.collectionSegmentHeight - 8)
-          .backgroundColor(Color.Transparent)
-          .systemMaterial(FnMusicMaterials.material(this.isSelected(repeatItem.item) ?
-            FnMusicMaterialRole.DETAIL_SEGMENT_SELECTED : FnMusicMaterialRole.CHIP))
-          .onClick((): void => this.onSelect(repeatItem.item.id))
         })
         .key((item: MusicChipItem): string => item.id)
     }
@@ -332,35 +351,31 @@ export struct CollectionActionRow {
 
 @ComponentV2
 export struct GenreVinylArtwork {
-  @Param genreName: string = '';
+  @Param variantIndex: number = 0;
   @Param widthValue: number = FnMusicUI.albumGridItemSize;
-  @Param heightValue: number = 112;
-
-  private labelMedia(): Resource {
-    let hash: number = 0;
-    for (let index: number = 0; index < this.genreName.length; index++) {
-      hash += this.genreName.charCodeAt(index);
-    }
-    const variant = Math.abs(hash) % 4;
-    if (variant === 1) return $r('app.media.music_genre_label_blue');
-    if (variant === 2) return $r('app.media.music_genre_label_orange');
-    if (variant === 3) return $r('app.media.music_genre_label_purple');
-    return $r('app.media.music_genre_label_red');
-  }
+  @Param heightValue: number = FnMusicUI.genreCardHeight;
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       Image($r('app.media.music_genre_vinyl'))
-        .width(126)
-        .height(126)
+        .width(FnMusicUI.genreCardRecordSize)
+        .height(FnMusicUI.genreCardRecordSize)
         .objectFit(ImageFit.Contain)
-        .translate({ x: this.widthValue - 88, y: 28 })
+        .translate({
+          x: this.widthValue - FnMusicUI.genreCardRecordSize + FnMusicUI.genreCardRecordRightOverflow,
+          y: FnMusicUI.genreCardRecordTop
+        })
 
-      Image(this.labelMedia())
-        .width(43)
-        .height(43)
+      Image(genreLabelMedia(this.variantIndex))
+        .width(FnMusicUI.genreCardLabelSize)
+        .height(FnMusicUI.genreCardLabelSize)
         .objectFit(ImageFit.Contain)
-        .translate({ x: this.widthValue - 46.5, y: 69.5 })
+        .translate({
+          x: this.widthValue - FnMusicUI.genreCardRecordSize + FnMusicUI.genreCardRecordRightOverflow +
+            (FnMusicUI.genreCardRecordSize - FnMusicUI.genreCardLabelSize) / 2,
+          y: FnMusicUI.genreCardRecordTop +
+            (FnMusicUI.genreCardRecordSize - FnMusicUI.genreCardLabelSize) / 2
+        })
     }
     .width(this.widthValue)
     .height(this.heightValue)
@@ -410,14 +425,15 @@ export struct ArtistListItem {
 export struct GenreGridItem {
   @Param genre: MusicGenre = new MusicGenre();
   @Param itemWidth: number = FnMusicUI.albumGridItemSize;
+  @Param variantIndex: number = 0;
   @Event onOpen: (genre: MusicGenre) => void = (_: MusicGenre): void => {};
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
       GenreVinylArtwork({
-        genreName: this.genre.name,
+        variantIndex: this.variantIndex,
         widthValue: this.itemWidth,
-        heightValue: 112
+        heightValue: FnMusicUI.genreCardHeight
       })
       Column({ space: 2 }) {
         Text(this.genre.name)
@@ -435,11 +451,91 @@ export struct GenreGridItem {
       .alignItems(HorizontalAlign.Start)
     }
     .width(this.itemWidth)
-    .height(112)
+    .height(FnMusicUI.genreCardHeight)
     .borderRadius(FnMusicUI.albumGridRadius)
     .backgroundColor($r('app.color.genre_card_surface'))
     .clip(true)
     .onClick((): void => this.onOpen(this.genre))
+  }
+}
+
+@ComponentV2
+export struct PlaylistSelectionActionRow {
+  @Param selectedCount: number = 0;
+  @Param totalCount: number = 0;
+  @Param busy: boolean = false;
+  @Event onToggleAll: () => void = (): void => {};
+  @Event onPlaySelected: () => void = (): void => {};
+  @Event onAddQueue: () => void = (): void => {};
+  @Event onRemove: () => void = (): void => {};
+  @Event onDone: () => void = (): void => {};
+
+  private allSelected(): boolean {
+    return this.totalCount > 0 && this.selectedCount === this.totalCount;
+  }
+
+  build() {
+    Column({ space: 8 }) {
+      Row({ space: 8 }) {
+        Text(`已选择 ${this.selectedCount} 首`)
+          .layoutWeight(1)
+          .fontSize(FnMusicUI.bodySize)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+        Button(this.allSelected() ? '取消全选' : '全选', { type: ButtonType.Capsule, stateEffect: true })
+          .height(34)
+          .padding({ left: 12, right: 12 })
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_primary'))
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .enabled(!this.busy && this.totalCount > 0)
+          .onClick((): void => this.onToggleAll())
+        Button('完成', { type: ButtonType.Capsule, stateEffect: true })
+          .height(34)
+          .padding({ left: 12, right: 12 })
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_primary'))
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .enabled(!this.busy)
+          .onClick((): void => this.onDone())
+      }
+      .width('100%')
+
+      Row({ space: 8 }) {
+        Button('播放选中', { type: ButtonType.Capsule, stateEffect: true })
+          .layoutWeight(1)
+          .height(36)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_primary'))
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .enabled(!this.busy && this.selectedCount > 0)
+          .onClick((): void => this.onPlaySelected())
+        Button('加入播放列表', { type: ButtonType.Capsule, stateEffect: true })
+          .layoutWeight(1)
+          .height(36)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_primary'))
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .enabled(!this.busy && this.selectedCount > 0)
+          .onClick((): void => this.onAddQueue())
+        Button('移出歌单', { type: ButtonType.Capsule, stateEffect: true })
+          .layoutWeight(1)
+          .height(36)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.danger'))
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
+          .enabled(!this.busy && this.selectedCount > 0)
+          .onClick((): void => this.onRemove())
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding({ top: 8, bottom: 8 })
   }
 }
 
@@ -453,10 +549,13 @@ export struct DenseTrackRow {
   @Param showDuration: boolean = true;
   @Param showFavoriteAction: boolean = false;
   @Param useTrackNumber: boolean = false;
+  @Param selectionMode: boolean = false;
+  @Param selected: boolean = false;
   @Event onPlay: (index: number) => void = (_: number): void => {};
   @Event onFavorite: (track: MusicTrack, favorite: boolean) => void =
     (_: MusicTrack, __: boolean): void => {};
   @Event onMore: (track: MusicTrack) => void = (_: MusicTrack): void => {};
+  @Event onToggleSelection: (track: MusicTrack) => void = (_: MusicTrack): void => {};
 
   private formatLabel(): string {
     const format = this.track.audioSpec.format.trim();
@@ -472,7 +571,26 @@ export struct DenseTrackRow {
 
   build() {
     Row({ space: 10 }) {
-      if (this.showIndex) {
+      if (this.selectionMode) {
+        Button({ type: ButtonType.Circle, stateEffect: true }) {
+          if (this.selected) {
+            SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
+              .fontSize(22)
+              .fontColor([$r('app.color.accent')])
+          } else {
+            Row()
+              .width(18)
+              .height(18)
+              .borderRadius(9)
+              .border({ width: 1.5, color: $r('app.color.text_secondary') })
+          }
+        }
+        .width(34)
+        .height(34)
+        .backgroundColor(Color.Transparent)
+        .accessibilityText(this.selected ? `取消选择 ${this.track.title}` : `选择 ${this.track.title}`)
+        .onClick((): void => this.onToggleSelection(this.track))
+      } else if (this.showIndex) {
         Text(`${this.displayIndex()}`)
           .width(24)
           .fontSize(13)
@@ -530,15 +648,21 @@ export struct DenseTrackRow {
       }
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
-      .onClick((): void => this.onPlay(this.index))
+      .onClick((): void => {
+        if (this.selectionMode) {
+          this.onToggleSelection(this.track);
+        } else {
+          this.onPlay(this.index);
+        }
+      })
 
-      if (this.showDuration) {
+      if (this.showDuration && !this.selectionMode) {
         Text(formatDuration(this.track.durationMs))
           .fontSize(12)
           .fontColor($r('app.color.text_secondary'))
       }
 
-      if (this.showFavoriteAction) {
+      if (this.showFavoriteAction && !this.selectionMode) {
         Button({ type: ButtonType.Circle, stateEffect: true }) {
           SymbolGlyph(this.track.isFavorite ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'))
             .fontSize(20)
@@ -551,18 +675,22 @@ export struct DenseTrackRow {
         .onClick((): void => this.onFavorite(this.track, !this.track.isFavorite))
       }
 
-      Button({ type: ButtonType.Circle, stateEffect: true }) {
-        VerticalMoreDots()
+      if (!this.selectionMode) {
+        Button({ type: ButtonType.Circle, stateEffect: true }) {
+          VerticalMoreDots()
+        }
+        .width(36)
+        .height(36)
+        .backgroundColor(Color.Transparent)
+        .accessibilityText(`${this.track.title} 更多操作`)
+        .onClick((): void => this.onMore(this.track))
       }
-      .width(36)
-      .height(36)
-      .backgroundColor(Color.Transparent)
-      .accessibilityText(`${this.track.title} 更多操作`)
-      .onClick((): void => this.onMore(this.track))
     }
     .width('100%')
     .height(FnMusicUI.denseTrackRowHeight)
     .padding({ left: 2, right: 2 })
+    .borderRadius(FnMusicUI.controlRadius)
+    .backgroundColor(this.selectionMode && this.selected ? $r('app.color.surface_secondary') : Color.Transparent)
   }
 }
 
@@ -716,6 +844,104 @@ export struct ArtistDetailHero {
         .width('100%')
         .height(24)
         .objectFit(ImageFit.Fill)
+        .hitTestBehavior(HitTestMode.None)
+    }
+    .width('100%')
+    .height(FnMusicUI.artistHeroHeight)
+    .clip(true)
+  }
+}
+
+@ComponentV2
+export struct GenreDetailHero {
+  @Param genre: MusicGenre = new MusicGenre();
+  @Param variantIndex: number = 0;
+
+  build() {
+    Stack({ alignContent: Alignment.BottomStart }) {
+      Column()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 135,
+          colors: [
+            [$r('app.color.page_genre_background_start'), 0],
+            [$r('app.color.page_genre_background_end'), 1]
+          ]
+        })
+
+      Column()
+        .width('100%')
+        .height('100%')
+        .radialGradient({
+          center: ['82%', '35%'],
+          radius: '72%',
+          colors: [
+            [$r('app.color.album_cover_shadow'), 0],
+            [$r('app.color.transparent'), 1]
+          ]
+        })
+        .opacity(0.34)
+
+      Stack({ alignContent: Alignment.TopEnd }) {
+        Image($r('app.media.music_genre_vinyl'))
+          .width(FnMusicUI.genreHeroRecordSize)
+          .height(FnMusicUI.genreHeroRecordSize)
+          .objectFit(ImageFit.Contain)
+          .translate({
+            x: FnMusicUI.genreHeroRecordOffsetX,
+            y: FnMusicUI.genreHeroRecordOffsetY
+          })
+
+        Image(genreLabelMedia(this.variantIndex))
+          .width(FnMusicUI.genreHeroLabelSize)
+          .height(FnMusicUI.genreHeroLabelSize)
+          .objectFit(ImageFit.Contain)
+          .translate({
+            x: FnMusicUI.genreHeroLabelOffsetX,
+            y: FnMusicUI.genreHeroLabelOffsetY
+          })
+      }
+      .width('100%')
+      .height('100%')
+      .hitTestBehavior(HitTestMode.None)
+
+      Column()
+        .width('100%')
+        .height('100%')
+        .linearGradient({
+          angle: 180,
+          colors: [
+            [$r('app.color.transparent'), 0.12],
+            [$r('app.color.album_hero_top_scrim'), 0.44],
+            [$r('app.color.page_genre_background_end'), 1]
+          ]
+        })
+
+      Column({ space: 4 }) {
+        Text(this.genre.name)
+          .fontSize(28)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(`${this.genre.trackCount} 首歌曲`)
+          .fontSize(FnMusicUI.supportingSize)
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .width('100%')
+      .padding({
+        left: 24,
+        right: 24,
+        bottom: FnMusicUI.artistHeroTitleBottomPadding
+      })
+      .alignItems(HorizontalAlign.Start)
+
+      Image($r('app.media.artist_hero_curve_mask'))
+        .width('100%')
+        .height(24)
+        .objectFit(ImageFit.Fill)
+        .fillColor($r('app.color.page_genre_background_end'))
         .hitTestBehavior(HitTestMode.None)
     }
     .width('100%')

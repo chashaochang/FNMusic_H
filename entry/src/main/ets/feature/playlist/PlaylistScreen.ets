@@ -2,6 +2,7 @@ import { FnMusicUI } from '../../design/FnMusicUI';
 import { MusicPlaylist } from '../../model/MusicModels';
 import {
   EmptyMusicState,
+  MusicEmptyKind,
   MusicArtwork,
   PlaylistRow,
   SectionHeader,
@@ -104,9 +105,9 @@ export struct PlaylistCollectionSection {
 
       if (this.playlists.length === 0) {
         EmptyMusicState({
+          kind: MusicEmptyKind.LIST,
           title: '还没有自建歌单',
-          message: '点击「新建」创建第一个歌单。',
-          symbol: $r('sys.symbol.music_note_list')
+          message: '点击「新建」创建第一个歌单。'
         })
       } else {
         Column() {
@@ -166,9 +167,9 @@ export struct PlaylistScreen {
       if (this.playlists.length === 0) {
         ListItem() {
           EmptyMusicState({
+            kind: MusicEmptyKind.LIST,
             title: '还没有自建歌单',
-            message: '点击右上角新建第一个歌单。',
-            symbol: $r('sys.symbol.music_note_list')
+            message: '点击右上角新建第一个歌单。'
           })
         }
         .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })

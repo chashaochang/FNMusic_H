@@ -96,10 +96,11 @@ export struct MusicChipStrip {
   @Param items: MusicChipItem[] = [];
   @Param selectedId: string = '';
   @Param transparentSurface: boolean = false;
+  @Param scroller: Scroller = new Scroller();
   @Event onSelect: (id: string) => void = (_: string): void => {};
 
   build() {
-    List({ space: FnMusicUI.compactGap }) {
+    List({ space: FnMusicUI.compactGap, scroller: this.scroller }) {
       Repeat<MusicChipItem>(this.items)
         .each((repeatItem: RepeatItem<MusicChipItem>): void => {
           ListItem() {
@@ -120,6 +121,7 @@ export struct MusicChipStrip {
     .edgeEffect(EdgeEffect.Spring)
     .width('100%')
     .height(FnMusicUI.chipHeight)
+    .clip(true)
   }
 }
 
@@ -679,30 +681,101 @@ export struct PlaylistRow {
   }
 }
 
+export enum MusicEmptyKind {
+  CONTENT = 'content',
+  SEARCH = 'search',
+  LIST = 'list',
+  LOAD_FAILED = 'load_failed',
+  NETWORK_ERROR = 'network_error',
+  NOT_FOUND = 'not_found'
+}
+
 @ComponentV2
 export struct EmptyMusicState {
-  @Param title: string = '这里还没有内容';
-  @Param message: string = '连接服务器后会自动显示你的音乐。';
-  @Param symbol: Resource = $r('sys.symbol.music');
+  @Param kind: MusicEmptyKind = MusicEmptyKind.CONTENT;
+  @Param title: string = '空空如也';
+  @Param message: string = '';
+  @Param compact: boolean = false;
+  @Param illustrationSize: number = 0;
+  @Param actionTitle: string = '';
+  @Param actionEnabled: boolean = true;
+  @Event onAction: () => void = (): void => {};
+
+  private illustration(): Resource {
+    switch (this.kind) {
+      case MusicEmptyKind.SEARCH:
+        return $r('app.media.music_empty_search');
+      case MusicEmptyKind.LIST:
+        return $r('app.media.music_empty_list');
+      case MusicEmptyKind.LOAD_FAILED:
+        return $r('app.media.music_empty_load_failed');
+      case MusicEmptyKind.NETWORK_ERROR:
+        return $r('app.media.music_empty_network_error');
+      case MusicEmptyKind.NOT_FOUND:
+        return $r('app.media.music_empty_not_found');
+      case MusicEmptyKind.CONTENT:
+      default:
+        return $r('app.media.music_empty_content');
+    }
+  }
+
+  private resolvedIllustrationSize(): number {
+    if (this.illustrationSize > 0) {
+      return this.illustrationSize;
+    }
+    return this.compact ? FnMusicUI.emptyCompactIllustrationSize : FnMusicUI.emptyIllustrationSize;
+  }
 
   build() {
-    Column({ space: FnMusicUI.compactGap }) {
-      SymbolGlyph(this.symbol)
-        .fontSize(36)
-        .fontColor([$r('app.color.accent')])
-      Text(this.title)
-        .fontSize(17)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-      Text(this.message)
-        .fontSize(FnMusicUI.supportingSize)
-        .fontColor($r('app.color.text_secondary'))
-        .textAlign(TextAlign.Center)
-        .lineHeight(20)
-        .maxLines(3)
+    Column({ space: FnMusicUI.emptyIllustrationGap }) {
+      Image(this.illustration())
+        .width(this.resolvedIllustrationSize())
+        .height(this.resolvedIllustrationSize())
+        .objectFit(ImageFit.Contain)
+
+      Column({ space: FnMusicUI.emptyTextGap }) {
+        Text(this.title)
+          .fontSize(FnMusicUI.emptyTitleSize)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_secondary'))
+          .textAlign(TextAlign.Center)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+
+        if (this.message.length > 0) {
+          Text(this.message)
+            .fontSize(FnMusicUI.supportingSize)
+            .fontColor($r('app.color.text_secondary'))
+            .textAlign(TextAlign.Center)
+            .lineHeight(20)
+            .maxLines(3)
+        }
+
+        if (this.actionTitle.length > 0) {
+          Blank().height(4)
+          Button(this.actionTitle, { type: ButtonType.Normal, stateEffect: true })
+            .height(FnMusicUI.emptyActionHeight)
+            .padding({ left: 16, right: 16 })
+            .fontSize(FnMusicUI.supportingSize)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.accent_contrast'))
+            .backgroundColor($r('app.color.accent'))
+            .borderRadius(FnMusicUI.emptyActionHeight / 2)
+            .enabled(this.actionEnabled)
+            .onClick((): void => this.onAction())
+        }
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
-    .padding({ top: 36, bottom: 36, left: 24, right: 24 })
+    .padding({
+      top: this.compact ? FnMusicUI.emptyCompactTopPadding : FnMusicUI.emptyTopPadding,
+      bottom: this.compact ? FnMusicUI.emptyCompactBottomPadding : FnMusicUI.emptyBottomPadding,
+      left: 24,
+      right: 24
+    })
+    .alignItems(HorizontalAlign.Center)
     .justifyContent(FlexAlign.Center)
   }
 }

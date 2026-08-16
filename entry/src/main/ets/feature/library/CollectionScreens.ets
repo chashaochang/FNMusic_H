@@ -2,7 +2,7 @@ import { FnMusicUI } from '../../design/FnMusicUI';
 import { AuthPhase } from '../../auth/ConnectionModels';
 import { AppRuntime, AppRuntimeState } from '../../common/AppRuntime';
 import { MusicAlbum, MusicArtist, MusicGenre } from '../../model/MusicModels';
-import { EmptyMusicState, SecondaryPageHeader } from '../common/MusicUiComponents';
+import { EmptyMusicState, MusicEmptyKind, SecondaryPageHeader } from '../common/MusicUiComponents';
 import { AlbumCatalogItem, ArtistCatalogItem, GenreGridItem } from './LibraryVisualComponents';
 
 @ComponentV2
@@ -82,7 +82,7 @@ export struct AlbumCollectionScreen {
       List({ space: 0 }) {
         if (this.albums.length === 0) {
           ListItem() {
-            EmptyMusicState({ title: '还没有专辑', message: '专辑数据同步后会显示在这里。' })
+            EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有专辑' })
           }
         } else {
           Repeat<MusicAlbum>(this.albums)
@@ -171,7 +171,7 @@ export struct ArtistCollectionScreen {
       List({ space: 0 }) {
         if (this.artists.length === 0) {
           ListItem() {
-            EmptyMusicState({ title: '还没有歌手', message: '歌手数据同步后会显示在这里。', symbol: $r('sys.symbol.person_fill') })
+            EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有歌手' })
           }
         } else {
           Repeat<MusicArtist>(this.artists)
@@ -264,7 +264,7 @@ export struct GenreCollectionScreen {
       List({ space: FnMusicUI.albumGridGap }) {
         if (this.genres.length === 0) {
           ListItem() {
-            EmptyMusicState({ title: '还没有风格', message: '风格数据同步后会显示在这里。', symbol: $r('sys.symbol.music_badge_wave_2') })
+            EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有风格' })
           }
         } else {
           Repeat<number>(this.rowIndexes())
@@ -273,11 +273,13 @@ export struct GenreCollectionScreen {
                 Row({ space: FnMusicUI.albumGridGap }) {
                   GenreGridItem({
                     genre: this.genres[repeatItem.item * 2],
+                    variantIndex: repeatItem.item * 2,
                     onOpen: (genre: MusicGenre): void => this.onOpen(genre)
                   })
                   if (repeatItem.item * 2 + 1 < this.genres.length) {
                     GenreGridItem({
                       genre: this.genres[repeatItem.item * 2 + 1],
+                      variantIndex: repeatItem.item * 2 + 1,
                       onOpen: (genre: MusicGenre): void => this.onOpen(genre)
                     })
                   } else {

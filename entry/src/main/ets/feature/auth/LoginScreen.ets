@@ -220,6 +220,44 @@ struct LoginIntroOverlay {
 }
 
 @ComponentV2
+struct LoginEditorialCopyV2 {
+  @Param safeTop: number = 0;
+  @Param safeBottom: number = 0;
+
+  build() {
+    Column() {
+      Text('PERSONAL MUSIC ARCHIVE')
+        .fontSize(10)
+        .lineHeight(15)
+        .fontWeight(FontWeight.Medium)
+        .letterSpacing(1)
+        .fontColor($r('app.color.login_text_secondary'))
+        .opacity(0.45)
+
+      Blank()
+
+      Text('TRACKS // ALBUMS // ARTISTS')
+        .fontSize(10)
+        .lineHeight(15)
+        .fontWeight(FontWeight.Medium)
+        .letterSpacing(1)
+        .fontColor($r('app.color.login_text_secondary'))
+        .opacity(0.45)
+    }
+    .width('100%')
+    .height('100%')
+    .alignItems(HorizontalAlign.Start)
+    .padding({
+      left: FnMusicLoginMetrics.pageHorizontalPadding,
+      right: FnMusicLoginMetrics.pageHorizontalPadding,
+      top: Math.max(0, this.safeTop) + 8,
+      bottom: Math.max(0, this.safeBottom) + 18
+    })
+    .hitTestBehavior(HitTestMode.None)
+  }
+}
+
+@ComponentV2
 export struct LoginScreen {
   @Local insets: WindowInsetsState = connectWindowInsetsState();
   @Param runtime: AppRuntimeState = new AppRuntimeState();
@@ -270,6 +308,16 @@ export struct LoginScreen {
   build() {
     Stack() {
       LoginAmbientBackground({ ambientVisible: this.introComplete })
+
+      LoginEditorialCopyV2({
+        safeTop: this.insets.safeTop,
+        safeBottom: this.insets.safeBottom
+      })
+      .opacity(this.introComplete ? 1 : 0)
+      .animation({
+        duration: FnMusicLoginMetrics.introContentDuration,
+        curve: Curve.EaseOut
+      })
 
       Scroll() {
         Column() {
@@ -410,9 +458,6 @@ struct LoginBrandHeaderV2 {
           .fontSize(28)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.login_text_primary'))
-        Text('JGINYUE')
-          .fontSize(FnMusicUI.supportingSize)
-          .fontColor($r('app.color.login_text_secondary'))
       }
       .alignItems(HorizontalAlign.Start)
     }
@@ -475,7 +520,7 @@ struct NativeLoginFieldV2 {
       .height(FnMusicLoginMetrics.fieldHeight)
       .borderRadius(FnMusicLoginMetrics.fieldRadius)
       .clip(true)
-      .systemMaterial(FnMusicLoginMaterials.material(FnMusicLoginMaterialRole.INPUT))
+      .backgroundColor($r('app.color.login_input_fill'))
 
       Row()
         .width('100%')
@@ -595,41 +640,41 @@ struct LoginPrimaryActionV2 {
 
   build() {
     if (this.ready || this.busy) {
-      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
         if (this.busy) {
           Row({ space: 9 }) {
             LoadingProgress()
               .width(20)
               .height(20)
-              .color($r('app.color.brand_on_red'))
+              .color($r('app.color.login_primary_text'))
             Text(this.busyLabel)
               .fontSize(FnMusicUI.bodySize)
               .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.brand_on_red'))
+              .fontColor($r('app.color.login_primary_text'))
           }
         } else {
           Text('登录')
             .fontSize(FnMusicUI.bodySize)
             .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.brand_on_red'))
+            .fontColor($r('app.color.login_primary_text'))
         }
       }
       .width('100%')
       .height(FnMusicLoginMetrics.actionHeight)
       .borderRadius(FnMusicLoginMetrics.actionRadius)
+      .backgroundColor($r('app.color.login_primary_fill'))
       .enabled(!this.busy)
       .accessibilityText(this.busy ? this.busyLabel : '登录')
-      .systemMaterial(FnMusicLoginMaterials.material(FnMusicLoginMaterialRole.PRIMARY_ACTION))
       .onClick((): void => this.onAction())
     } else {
-      Button('登录', { type: ButtonType.Capsule, stateEffect: false })
+      Button('登录', { type: ButtonType.Normal, stateEffect: false })
         .width('100%')
         .height(FnMusicLoginMetrics.actionHeight)
         .borderRadius(FnMusicLoginMetrics.actionRadius)
         .fontSize(FnMusicUI.bodySize)
         .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.login_disabled_text'))
-        .backgroundColor($r('app.color.login_disabled_fill'))
+        .fontColor($r('app.color.login_primary_text'))
+        .backgroundColor($r('app.color.login_primary_fill'))
         .enabled(false)
         .accessibilityText('登录，需要填写服务器地址、用户名和密码')
     }

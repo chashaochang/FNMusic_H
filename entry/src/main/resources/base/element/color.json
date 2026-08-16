@@ -265,6 +265,18 @@
       "value": "#2EFFFFFF"
     },
     {
+      "name": "login_input_fill",
+      "value": "#0FFFFFFF"
+    },
+    {
+      "name": "login_primary_fill",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "login_primary_text",
+      "value": "#FF000000"
+    },
+    {
       "name": "login_disabled_fill",
       "value": "#24FFFFFF"
     },

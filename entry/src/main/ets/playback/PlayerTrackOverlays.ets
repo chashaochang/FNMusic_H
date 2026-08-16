@@ -2,6 +2,7 @@ import { MusicPreferenceState } from '../common/MusicPreferenceStore';
 import { FnMusicUI } from '../design/FnMusicUI';
 import { FnMusicMaterialRole, FnMusicMaterials } from '../design/FnMusicMaterials';
 import { MusicArtist, MusicPlaylist, MusicTrack } from '../model/MusicModels';
+import { EmptyMusicState, MusicEmptyKind } from '../feature/common/MusicUiComponents';
 import { PlayerInfoRow, playerTrackInfoRows } from './PlayerUiPolicy';
 
 @ComponentV2
@@ -114,13 +115,13 @@ export struct PlayerPlaylistPicker {
       Column({ space: 4 }) {
         SheetHeader({ title: '添加到歌单', onClose: (): void => this.onClose() })
         if (this.playlists.length === 0) {
-          Text('请先在“我的”中创建歌单')
-            .width('100%')
-            .height(80)
-            .fontSize(FnMusicUI.bodySize)
-            .fontColor($r('app.color.text_secondary'))
-            .textAlign(TextAlign.Center)
-      } else {
+          EmptyMusicState({
+            kind: MusicEmptyKind.LIST,
+            title: '还没有自建歌单',
+            message: '请先创建歌单',
+            compact: true
+          })
+        } else {
           Scroll() {
             Column() {
               Repeat<MusicPlaylist>(this.playlists)

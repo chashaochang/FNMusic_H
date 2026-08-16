@@ -5,7 +5,12 @@ import { FnToast } from '../common/FnToast';
 import { LengthMetrics } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { MusicAlbum, MusicArtist, MusicPlaylist, MusicTrack, formatDuration } from '../model/MusicModels';
-import { MusicArtwork, RoamPulseIcon } from '../feature/common/MusicUiComponents';
+import {
+  EmptyMusicState,
+  MusicArtwork,
+  MusicEmptyKind,
+  RoamPulseIcon
+} from '../feature/common/MusicUiComponents';
 import { MusicPlaybackController } from './MusicPlaybackController';
 import { PlayerDynamicPalette, PlayerPaletteState } from './PlayerDynamicPalette';
 import { nearestLyricIndex, playerFormatLabel, desktopLyricErrorMessage } from './PlayerUiPolicy';
@@ -262,33 +267,59 @@ struct QueuePanel {
       .height(60)
 
       Row() {
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Text(`当前列表 ${this.state.queue.length}`)
-            .fontSize(FnMusicUI.bodySize)
-            .fontWeight(this.selectedTab === 0 ? FontWeight.Medium : FontWeight.Regular)
-            .fontColor(this.selectedTab === 0 ? $r('app.color.text_primary') : $r('app.color.text_secondary'))
+        if (this.selectedTab === 0) {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Text(`当前列表 ${this.state.queue.length}`)
+              .fontSize(FnMusicUI.bodySize)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
+          }
+          .layoutWeight(1)
+          .height(42)
+          .borderRadius(21)
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.CHIP_SELECTED))
+          .onClick((): void => { this.selectedTab = 0; })
+        } else {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Text(`当前列表 ${this.state.queue.length}`)
+              .fontSize(FnMusicUI.bodySize)
+              .fontWeight(FontWeight.Regular)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          .layoutWeight(1)
+          .height(42)
+          .borderRadius(21)
+          .backgroundColor(Color.Transparent)
+          .onClick((): void => { this.selectedTab = 0; })
         }
-        .layoutWeight(1)
-        .height(42)
-        .borderRadius(21)
-        .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(this.selectedTab === 0 ?
-          FnMusicMaterialRole.CHIP_SELECTED : FnMusicMaterialRole.CHIP))
-        .onClick((): void => { this.selectedTab = 0; })
 
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Text('历史列表 0')
-            .fontSize(FnMusicUI.bodySize)
-            .fontWeight(this.selectedTab === 1 ? FontWeight.Medium : FontWeight.Regular)
-            .fontColor(this.selectedTab === 1 ? $r('app.color.text_primary') : $r('app.color.text_secondary'))
+        if (this.selectedTab === 1) {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Text('历史列表 0')
+              .fontSize(FnMusicUI.bodySize)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
+          }
+          .layoutWeight(1)
+          .height(42)
+          .borderRadius(21)
+          .backgroundColor(Color.Transparent)
+          .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.CHIP_SELECTED))
+          .onClick((): void => { this.selectedTab = 1; })
+        } else {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Text('历史列表 0')
+              .fontSize(FnMusicUI.bodySize)
+              .fontWeight(FontWeight.Regular)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          .layoutWeight(1)
+          .height(42)
+          .borderRadius(21)
+          .backgroundColor(Color.Transparent)
+          .onClick((): void => { this.selectedTab = 1; })
         }
-        .layoutWeight(1)
-        .height(42)
-        .borderRadius(21)
-        .backgroundColor(Color.Transparent)
-        .systemMaterial(FnMusicMaterials.material(this.selectedTab === 1 ?
-          FnMusicMaterialRole.CHIP_SELECTED : FnMusicMaterialRole.CHIP))
-        .onClick((): void => { this.selectedTab = 1; })
       }
       .width('100%')
       .height(46)
@@ -337,95 +368,111 @@ struct QueuePanel {
       .height(50)
 
       if (this.selectedTab === 0) {
-        List({ space: 0 }) {
-          Repeat<MusicTrack>(this.state.queue)
-            .each((repeatItem: RepeatItem<MusicTrack>): void => {
-              ListItem() {
-                Column() {
-                  Row({ space: 10 }) {
+        if (this.state.queue.length === 0) {
+          Column() {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LIST,
+              title: '空空如也',
+              compact: true,
+              illustrationSize: FnMusicUI.emptyIllustrationSize
+            })
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+        } else {
+          List({ space: 0 }) {
+            Repeat<MusicTrack>(this.state.queue)
+              .each((repeatItem: RepeatItem<MusicTrack>): void => {
+                ListItem() {
+                  Column() {
                     Row({ space: 10 }) {
-                      SymbolGlyph(repeatItem.index === this.state.currentIndex ?
-                        $r('sys.symbol.speaker_wave_2_fill') : $r('sys.symbol.music'))
-                        .width(24)
-                        .fontSize(17)
-                        .fontColor([repeatItem.index === this.state.currentIndex ?
-                          $r('app.color.accent') : $r('app.color.text_secondary')])
-                      Column({ space: 3 }) {
-                        Text(repeatItem.item.title)
-                          .fontSize(FnMusicUI.bodySize)
-                          .fontWeight(repeatItem.index === this.state.currentIndex ? FontWeight.Medium : FontWeight.Regular)
-                          .fontColor(repeatItem.index === this.state.currentIndex ?
-                            $r('app.color.accent') : $r('app.color.text_primary'))
-                          .maxLines(1)
-                          .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        Row({ space: 6 }) {
-                          if (this.formatLabel(repeatItem.item).length > 0) {
-                            Text(this.formatLabel(repeatItem.item))
-                              .height(20)
-                              .padding({ left: 5, right: 5 })
-                              .fontSize(10)
-                              .fontColor($r('app.color.text_secondary'))
-                              .borderRadius(5)
-                              .backgroundColor($r('app.color.player_format_background'))
-                          }
-                          Text(this.trackSubtitle(repeatItem.item))
-                            .layoutWeight(1)
-                            .fontSize(FnMusicUI.supportingSize)
+                      Row({ space: 10 }) {
+                        SymbolGlyph(repeatItem.index === this.state.currentIndex ?
+                          $r('sys.symbol.speaker_wave_2_fill') : $r('sys.symbol.music'))
+                          .width(24)
+                          .fontSize(17)
+                          .fontColor([repeatItem.index === this.state.currentIndex ?
+                            $r('app.color.accent') : $r('app.color.text_secondary')])
+                        Column({ space: 3 }) {
+                          Text(repeatItem.item.title)
+                            .fontSize(FnMusicUI.bodySize)
+                            .fontWeight(repeatItem.index === this.state.currentIndex ? FontWeight.Medium : FontWeight.Regular)
                             .fontColor(repeatItem.index === this.state.currentIndex ?
-                              $r('app.color.accent') : $r('app.color.text_secondary'))
+                              $r('app.color.accent') : $r('app.color.text_primary'))
                             .maxLines(1)
                             .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          Row({ space: 6 }) {
+                            if (this.formatLabel(repeatItem.item).length > 0) {
+                              Text(this.formatLabel(repeatItem.item))
+                                .height(20)
+                                .padding({ left: 5, right: 5 })
+                                .fontSize(10)
+                                .fontColor($r('app.color.text_secondary'))
+                                .borderRadius(5)
+                                .backgroundColor($r('app.color.player_format_background'))
+                            }
+                            Text(this.trackSubtitle(repeatItem.item))
+                              .layoutWeight(1)
+                              .fontSize(FnMusicUI.supportingSize)
+                              .fontColor(repeatItem.index === this.state.currentIndex ?
+                                $r('app.color.accent') : $r('app.color.text_secondary'))
+                              .maxLines(1)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          }
+                          .width('100%')
                         }
-                        .width('100%')
+                        .layoutWeight(1)
+                        .alignItems(HorizontalAlign.Start)
                       }
                       .layoutWeight(1)
-                      .alignItems(HorizontalAlign.Start)
+                      .height('100%')
+                      .alignItems(VerticalAlign.Center)
+                      .onClick((): void => this.onSelect(repeatItem.index))
+                      Button({ type: ButtonType.Circle, stateEffect: true }) {
+                        SymbolGlyph($r('sys.symbol.xmark'))
+                          .fontSize(19)
+                          .fontColor([$r('app.color.text_secondary')])
+                      }
+                      .width(40)
+                      .height(40)
+                      .backgroundColor(Color.Transparent)
+                      .accessibilityText(`从播放列表移除 ${repeatItem.item.title}`)
+                      .onClick((): void => this.onRemove(repeatItem.index))
                     }
-                    .layoutWeight(1)
-                    .height('100%')
-                    .alignItems(VerticalAlign.Center)
-                    .onClick((): void => this.onSelect(repeatItem.index))
-                    Button({ type: ButtonType.Circle, stateEffect: true }) {
-                      SymbolGlyph($r('sys.symbol.xmark'))
-                        .fontSize(19)
-                        .fontColor([$r('app.color.text_secondary')])
-                    }
-                    .width(40)
-                    .height(40)
-                    .backgroundColor(Color.Transparent)
-                    .accessibilityText(`从播放列表移除 ${repeatItem.item.title}`)
-                    .onClick((): void => this.onRemove(repeatItem.index))
-                  }
-                  .width('100%')
-                  .height(58)
-                  .padding({ left: 2, right: 0 })
+                    .width('100%')
+                    .height(58)
+                    .padding({ left: 2, right: 0 })
 
-                  Divider()
-                    .strokeWidth(0.5)
-                    .color($r('app.color.divider'))
-                    .margin({ left: 34 })
+                    Divider()
+                      .strokeWidth(0.5)
+                      .color($r('app.color.divider'))
+                      .margin({ left: 34 })
+                  }
                 }
-              }
-            })
-            .key((item: MusicTrack): string => item.guid)
-            .virtualScroll()
+              })
+              .key((item: MusicTrack): string => item.guid)
+              .virtualScroll()
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .scrollBar(BarState.Off)
+          .cachedCount(3)
         }
-        .layoutWeight(1)
-        .width('100%')
-        .scrollBar(BarState.Off)
-        .cachedCount(3)
       } else {
-        Column({ space: 10 }) {
-          SymbolGlyph($r('sys.symbol.clock'))
-            .fontSize(34)
-            .fontColor([$r('app.color.text_secondary')])
-          Text('暂无历史列表')
-            .fontSize(FnMusicUI.bodySize)
-            .fontColor($r('app.color.text_secondary'))
+        Column() {
+          EmptyMusicState({
+            kind: MusicEmptyKind.LIST,
+            title: '暂无历史列表',
+            compact: true,
+            illustrationSize: FnMusicUI.emptyIllustrationSize
+          })
         }
         .layoutWeight(1)
         .width('100%')
         .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
       }
     }
     .width('100%')
@@ -703,7 +750,11 @@ struct PlayerLyricPage {
         } else if (this.state.lyricLines.length === 0) {
           Column({ space: 12 }) {
             Text(this.state.lyricStatus === LyricLoadStatus.ERROR ? '歌词读取失败' : '暂无歌词')
-              .fontSize(FnMusicUI.bodySize)
+              .fontSize(this.state.lyricStatus === LyricLoadStatus.ERROR ?
+                FnMusicUI.playerLyricErrorSize : FnMusicUI.playerEmptyLyricSize)
+              .lineHeight(this.state.lyricStatus === LyricLoadStatus.ERROR ?
+                FnMusicUI.playerLyricErrorLineHeight : FnMusicUI.playerEmptyLyricLineHeight)
+              .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_secondary'))
             if (this.state.lyricStatus === LyricLoadStatus.ERROR) {
               Button('重新读取')

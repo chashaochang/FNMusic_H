@@ -465,21 +465,33 @@ export class AppRuntime {
     return AppRuntime.roamTracks(result, false);
   }
 
-  static async createPlaylist(name: string): Promise<MusicPlaylist> {
-    const playlist = await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.createPlaylist(name));
+  static async createPlaylist(name: string, coverId?: string): Promise<MusicPlaylist> {
+    const playlist = await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.createPlaylist(name, coverId));
+    if (playlist.coverId.length === 0 && coverId !== undefined) {
+      playlist.coverId = coverId;
+    }
     AppRuntime.state().playlists = [playlist].concat(AppRuntime.state().playlists);
     return playlist;
   }
 
   static async renamePlaylist(playlist: MusicPlaylist, name: string): Promise<void> {
+    await AppRuntime.editPlaylist(playlist, name);
+  }
+
+  static async editPlaylist(playlist: MusicPlaylist, name: string, coverId?: string): Promise<void> {
     const normalized = name.trim();
-    await AppRuntime.authStore().withAutoReconnect(() => AppRuntime.api.editPlaylist(playlist.guid, normalized));
+    await AppRuntime.authStore().withAutoReconnect(() =>
+      AppRuntime.api.editPlaylist(playlist.guid, normalized, coverId));
     playlist.name = normalized;
+    if (coverId !== undefined) {
+      playlist.coverId = coverId;
+    }
     AppRuntime.state().playlists = AppRuntime.state().playlists.slice();
   }
 
-  static async editPlaylist(playlist: MusicPlaylist, name: string): Promise<void> {
-    await AppRuntime.renamePlaylist(playlist, name);
+  static async uploadPlaylistCover(bytes: Uint8Array, fileName: string, mimeType: string): Promise<string> {
+    return await AppRuntime.authStore().withAutoReconnect(() =>
+      AppRuntime.api.uploadPlaylistCover(bytes, fileName, mimeType));
   }
 
   static async deletePlaylist(playlist: MusicPlaylist): Promise<void> {
@@ -496,6 +508,14 @@ export class AppRuntime {
   static async removeTrackFromPlaylist(playlistGuid: string, trackGuid: string): Promise<void> {
     await AppRuntime.authStore().withAutoReconnect(() =>
       AppRuntime.api.removeTracksFromPlaylist(playlistGuid, [trackGuid]));
+  }
+
+  static async removeTracksFromPlaylist(playlistGuid: string, trackGuids: string[]): Promise<void> {
+    if (trackGuids.length === 0) {
+      return;
+    }
+    await AppRuntime.authStore().withAutoReconnect(() =>
+      AppRuntime.api.removeTracksFromPlaylist(playlistGuid, trackGuids));
   }
 
   static streamUrl(trackGuid: string): string {

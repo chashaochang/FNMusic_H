@@ -323,6 +323,10 @@ export class FeiniuMusicApi {
   }
 
   coverUrl(coverId: string, size: number = 512, updatedAt?: number): string {
+    const defaultCoverIndex = FeiniuMusicApi.playlistDefaultCoverIndex(coverId.trim());
+    if (defaultCoverIndex > 0) {
+      return `${this.configuration.baseUrl}/music/static/assets/img/playlist-covers/${defaultCoverIndex}.png`;
+    }
     let query = this.singleQuery('coverId', coverId);
     query = this.appendQuery(query, 'size', size);
     if (updatedAt !== undefined && updatedAt > 0) {
@@ -350,11 +354,12 @@ export class FeiniuMusicApi {
     await this.request<EmptyResponseData>('POST', '/event/report', undefined, body, true, false);
   }
 
-  async uploadPlaylistCover(bytes: Uint8Array, fileName: string = 'cover.png'): Promise<string> {
+  async uploadPlaylistCover(bytes: Uint8Array, fileName: string = 'cover.png',
+    mimeType: string = 'image/png'): Promise<string> {
     const boundary = `----FeiniuMusic${Date.now()}`;
     const prefix = this.encoder.encodeInto(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
-      `Content-Type: image/png\r\n\r\n`
+      `Content-Type: ${mimeType}\r\n\r\n`
     );
     const suffix = this.encoder.encodeInto(`\r\n--${boundary}--\r\n`);
     const body = new Uint8Array(prefix.length + bytes.length + suffix.length);
@@ -368,6 +373,15 @@ export class FeiniuMusicApi {
       throw new ApiError(ApiErrorKind.PARSE, '上传成功响应缺少 coverId');
     }
     return coverId;
+  }
+
+  private static playlistDefaultCoverIndex(coverId: string): number {
+    for (let index = 1; index <= 4; index++) {
+      if (coverId === `playlist_default_${index}`) {
+        return index;
+      }
+    }
+    return 0;
   }
 
   private async pageRequest<TWire, TModel>(path: string, query: string,

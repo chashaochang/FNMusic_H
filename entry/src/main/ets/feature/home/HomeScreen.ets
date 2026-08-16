@@ -11,6 +11,7 @@ import {
 } from '../../model/MusicModels';
 import {
   EmptyMusicState,
+  MusicEmptyKind,
   MusicArtwork,
   MusicChipItem,
   MusicChipStrip,
@@ -32,6 +33,7 @@ export interface HomeFeatureCardData {
 @ObservedV2
 class StickySectionState {
   @Trace pinned: boolean = false;
+  @Trace menuReserved: boolean = false;
   @Trace selectedId: string = LibrarySection.RECENTLY_ADDED;
 }
 
@@ -40,6 +42,7 @@ struct HomeStickyChipHeader {
   @Param items: MusicChipItem[] = [];
   @Param state: StickySectionState = new StickySectionState();
   @Param stickyTopInset: number = 0;
+  @Param chipScroller: Scroller = new Scroller();
   @Event onSelect: (id: string) => void = (_: string): void => {};
   @Event onOpenSearch: () => void = (): void => {};
   @Event onPositionChange: (globalY: number) => void = (_: number): void => {};
@@ -49,6 +52,7 @@ struct HomeStickyChipHeader {
       MusicChipStrip({
         items: this.items,
         selectedId: this.state.selectedId,
+        scroller: this.chipScroller,
         onSelect: (id: string): void => {
           this.onSelect(id);
         }
@@ -68,6 +72,10 @@ struct HomeStickyChipHeader {
         .systemMaterial(FnMusicMaterials.material(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
         .accessibilityText('搜索')
         .onClick((): void => this.onOpenSearch())
+      } else if (this.state.menuReserved) {
+        Blank()
+          .width(40)
+          .height(40)
       }
     }
     .width('100%')
@@ -489,7 +497,10 @@ struct HomeRecentAlbumPreview {
       SectionHeader({ title: '最近添加专辑' })
         .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
       if (this.albums.length === 0) {
-        EmptyMusicState({ title: '还没有专辑', message: '最近添加的专辑会显示在这里。' })
+        EmptyMusicState({
+          kind: MusicEmptyKind.LIST,
+          title: '暂无最近添加数据'
+        })
           .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
       } else {
         List({ space: FnMusicUI.homeRecentAlbumGap }) {
@@ -575,6 +586,7 @@ export struct HomeScreen {
   @Local sectionState: StickySectionState = new StickySectionState();
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Local searchCollapsed: boolean = false;
+  private chipScroller: Scroller = new Scroller();
   @Event onPinnedChange: (pinned: boolean) => void = (_: boolean): void => {};
   @Event onSearchCollapsedChange: (collapsed: boolean) => void = (_: boolean): void => {};
   @Event onChromeProgress: (progress: number) => void = (_: number): void => {};
@@ -728,11 +740,39 @@ export struct HomeScreen {
     this.onPinnedChange(pinned);
   }
 
+  private selectedSectionIndex(): number {
+    const index = this.sections.findIndex((item: MusicChipItem): boolean =>
+      item.id === this.sectionState.selectedId);
+    return index >= 0 ? index : 0;
+  }
+
+  private revealSelectedChip(smooth: boolean): void {
+    const index = this.selectedSectionIndex();
+    setTimeout((): void => {
+      this.chipScroller.scrollToIndex(index, smooth, ScrollAlign.CENTER);
+    }, 0);
+  }
+
+  private updateMenuReservedState(reserved: boolean): void {
+    if (reserved === this.sectionState.menuReserved) {
+      return;
+    }
+    this.sectionState.menuReserved = reserved;
+    this.revealSelectedChip(false);
+  }
+
   private updateStickyHeaderPosition(globalY: number): void {
-    // Hiding the navigation title bar changes the content origin from safeTop to 0.
-    // Switch only when the chip reaches the equivalent top edge in the active coordinate space.
-    const pinThreshold = this.sectionState.pinned ? 1 : Math.max(0, this.stickyTopInset) + 1;
-    this.updatePinnedState(globalY <= pinThreshold);
+    const pinThreshold = Math.max(0, this.stickyTopInset) + 1;
+    const releaseThreshold = pinThreshold + FnMusicUI.compactGap;
+    const reserveThreshold = Math.max(0, this.stickyTopInset) + FnMusicUI.homeActionBarHeight;
+    this.updateMenuReservedState(globalY <= reserveThreshold);
+    if (this.sectionState.pinned) {
+      if (globalY > releaseThreshold) {
+        this.updatePinnedState(false);
+      }
+    } else if (globalY <= pinThreshold) {
+      this.updatePinnedState(true);
+    }
   }
 
   private updateSearchPosition(globalY: number, height: number): void {
@@ -747,6 +787,7 @@ export struct HomeScreen {
 
   private selectSection(id: string): void {
     this.sectionState.selectedId = id;
+    this.revealSelectedChip(true);
     setTimeout((): void => {
       this.pageScroller.scrollToIndex(3, false, ScrollAlign.START);
     }, 0);
@@ -758,6 +799,7 @@ export struct HomeScreen {
       items: this.sections,
       state: this.sectionState,
       stickyTopInset: this.stickyTopInset,
+      chipScroller: this.chipScroller,
       onSelect: (id: string): void => {
         this.selectSection(id);
       },
@@ -844,7 +886,10 @@ export struct HomeScreen {
 
           if (this.recentTrackItems().length === 0) {
             ListItem() {
-              EmptyMusicState({ title: '还没有歌曲', message: '最近添加的歌曲会显示在这里。' })
+              EmptyMusicState({
+                kind: MusicEmptyKind.LIST,
+                title: '还没有最近添加的歌曲'
+              })
             }
             .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
           } else {
@@ -875,7 +920,7 @@ export struct HomeScreen {
 
           if (this.albumItems().length === 0) {
             ListItem() {
-              EmptyMusicState({ title: '还没有专辑', message: '专辑数据同步后会显示在这里。' })
+              EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有专辑' })
             }
             .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
           } else {
@@ -913,7 +958,7 @@ export struct HomeScreen {
 
           if (this.artistItems().length === 0) {
             ListItem() {
-              EmptyMusicState({ title: '还没有歌手', message: '歌手数据同步后会显示在这里。' })
+              EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有歌手' })
             }
             .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
           } else {
@@ -949,7 +994,7 @@ export struct HomeScreen {
 
           if (this.genreItems().length === 0) {
             ListItem() {
-              EmptyMusicState({ title: '还没有风格', message: '风格数据同步后会显示在这里。' })
+              EmptyMusicState({ kind: MusicEmptyKind.LIST, title: '还没有风格' })
             }
             .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
           } else {
@@ -960,12 +1005,14 @@ export struct HomeScreen {
                     GenreGridItem({
                       genre: this.genreItems()[repeatItem.item * 2],
                       itemWidth: FnMusicUI.homeCatalogGridItemSize,
+                      variantIndex: repeatItem.item * 2,
                       onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
                     })
                     if (repeatItem.item * 2 + 1 < this.genreItems().length) {
                       GenreGridItem({
                         genre: this.genreItems()[repeatItem.item * 2 + 1],
                         itemWidth: FnMusicUI.homeCatalogGridItemSize,
+                        variantIndex: repeatItem.item * 2 + 1,
                         onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
                       })
                     } else {
@@ -995,7 +1042,11 @@ export struct HomeScreen {
 
           if (this.trackItems().length === 0) {
             ListItem() {
-              EmptyMusicState({ title: '音乐库为空', message: '服务器音乐库中的歌曲会显示在这里。' })
+              EmptyMusicState({
+                kind: MusicEmptyKind.CONTENT,
+                title: '音乐库为空',
+                message: '添加音乐，开启畅听'
+              })
             }
             .padding({ left: FnMusicUI.pagePadding, right: FnMusicUI.pagePadding })
           } else {

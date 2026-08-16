@@ -64,6 +64,7 @@ export struct TrackActionsSheet {
   @Param track: MusicTrack = new MusicTrack();
   @Param canRemoveFromPlaylist: boolean = false;
   @Event onClose: () => void = (): void => {};
+  @Event onPlay: () => void = (): void => {};
   @Event onPlayNext: () => void = (): void => {};
   @Event onAddQueue: () => void = (): void => {};
   @Event onFavorite: () => void = (): void => {};
@@ -71,9 +72,10 @@ export struct TrackActionsSheet {
   @Event onOpenAlbum: () => void = (): void => {};
   @Event onOpenArtist: () => void = (): void => {};
   @Event onRemove: () => void = (): void => {};
+  @Event onInfo: () => void = (): void => {};
 
   private actionListHeight(): number {
-    const count = this.canRemoveFromPlaylist ? 7 : 6;
+    const count = this.canRemoveFromPlaylist ? 9 : 8;
     return count * (FnMusicUI.listRowHeight + 1) - 1;
   }
 
@@ -114,6 +116,11 @@ export struct TrackActionsSheet {
         Scroll() {
           Column() {
             TrackActionRow({
+              title: '播放',
+              symbol: $r('sys.symbol.play_fill'),
+              onSelect: (): void => this.onPlay()
+            })
+            TrackActionRow({
               title: '下一首播放',
               symbol: $r('sys.symbol.forward_end_fill'),
               onSelect: (): void => this.onPlayNext()
@@ -124,36 +131,40 @@ export struct TrackActionsSheet {
               onSelect: (): void => this.onAddQueue()
             })
             TrackActionRow({
-              title: this.track.isFavorite ? '取消收藏' : '添加至收藏',
+              title: this.track.isFavorite ? '取消收藏' : '收藏',
               symbol: this.track.isFavorite ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'),
               highlighted: this.track.isFavorite,
               onSelect: (): void => this.onFavorite()
             })
             TrackActionRow({
-              title: '添加至歌单',
+              title: '添加到歌单',
               symbol: $r('sys.symbol.plus_circle'),
               onSelect: (): void => this.onAddPlaylist()
+            })
+            TrackActionRow({
+              title: this.track.albumName.length > 0 ? `查看专辑：${this.track.albumName}` : '查看专辑',
+              symbol: $r('sys.symbol.music_note_list'),
+              onSelect: (): void => this.onOpenAlbum()
             })
             TrackActionRow({
               title: this.track.artistName.length > 0 ? `查看歌手：${this.track.artistName}` : '查看歌手',
               symbol: $r('sys.symbol.person'),
               onSelect: (): void => this.onOpenArtist()
             })
-            TrackActionRow({
-              title: this.track.albumName.length > 0 ? `查看专辑：${this.track.albumName}` : '查看专辑',
-              symbol: $r('sys.symbol.music_note_list'),
-              showDivider: this.canRemoveFromPlaylist,
-              onSelect: (): void => this.onOpenAlbum()
-            })
             if (this.canRemoveFromPlaylist) {
               TrackActionRow({
                 title: '从歌单移除',
                 symbol: $r('sys.symbol.trash'),
                 destructive: true,
-                showDivider: false,
                 onSelect: (): void => this.onRemove()
               })
             }
+            TrackActionRow({
+              title: '歌曲信息',
+              symbol: $r('sys.symbol.info_circle'),
+              showDivider: false,
+              onSelect: (): void => this.onInfo()
+            })
           }
           .width('100%')
         }

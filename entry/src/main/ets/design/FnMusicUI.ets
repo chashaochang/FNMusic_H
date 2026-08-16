@@ -25,6 +25,22 @@ export class FnMusicUI {
   static readonly albumGridItemSize: number = 160;
   static readonly homeCatalogGridItemSize: number = 158;
   static readonly albumGridRadius: number = 10;
+  // Feiniu Music Web genre cards use a 160 px vinyl at top 16 px with
+  // 20 px right overflow, plus a centered 64 px label. Keep that source
+  // composition when adapting the two-column card to the phone canvas.
+  static readonly genreCardHeight: number = 120;
+  static readonly genreCardRecordSize: number = 160;
+  static readonly genreCardRecordTop: number = 16;
+  static readonly genreCardRecordRightOverflow: number = 20;
+  static readonly genreCardLabelSize: number = 64;
+  // The detail page reuses the verified artist Hero height. Its larger
+  // record preserves the Web detail composition while remaining phone-first.
+  static readonly genreHeroRecordSize: number = 292;
+  static readonly genreHeroLabelSize: number = 116;
+  static readonly genreHeroRecordOffsetX: number = 64;
+  static readonly genreHeroRecordOffsetY: number = 18;
+  static readonly genreHeroLabelOffsetX: number = -24;
+  static readonly genreHeroLabelOffsetY: number = 106;
   static readonly detailHeroCoverSize: number = 116;
   // Video-derived catalog/detail baselines for the phone layout.
   static readonly collectionArtistArtworkSize: number = 56;
@@ -69,4 +85,28 @@ export class FnMusicUI {
   static readonly supportingSize: number = 13;
   static readonly titleSize: number = 24;
   static readonly tapTarget: number = 44;
+  // Feiniu Music Web empty-state illustrations are authored on a 150 x 150
+  // canvas. Keep that source geometry for full-page states and use the
+  // compact size only inside constrained mobile sheets.
+  static readonly emptyIllustrationSize: number = 150;
+  static readonly emptyCompactIllustrationSize: number = 96;
+  static readonly emptyIllustrationGap: number = 4;
+  static readonly emptyTextGap: number = 6;
+  static readonly emptyTitleSize: number = 14;
+  static readonly emptyTopPadding: number = 20;
+  static readonly emptyBottomPadding: number = 36;
+  static readonly emptyCompactTopPadding: number = 8;
+  static readonly emptyCompactBottomPadding: number = 16;
+  static readonly emptyActionHeight: number = 36;
+  // Web search landing reference: a 72 px material circle with a 28 px
+  // magnifier, positioned above the explanatory copy.
+  static readonly searchStartIconContainerSize: number = 72;
+  static readonly searchStartIconSize: number = 28;
+  static readonly searchStartTopPadding: number = 72;
+  // The Web player uses a prominent semibold empty-lyric line. The phone
+  // layout keeps the same hierarchy at a conservative mobile size.
+  static readonly playerEmptyLyricSize: number = 24;
+  static readonly playerLyricErrorSize: number = 18;
+  static readonly playerEmptyLyricLineHeight: number = 32;
+  static readonly playerLyricErrorLineHeight: number = 24;
 }

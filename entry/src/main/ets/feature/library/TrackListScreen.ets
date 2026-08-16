@@ -11,6 +11,7 @@ import {
 } from '../../model/MusicModels';
 import {
   EmptyMusicState,
+  MusicEmptyKind,
   MusicChipItem,
   SectionHeader,
   SecondaryPageHeader
@@ -22,9 +23,12 @@ import {
   CollectionActionRow,
   CollectionSegmentedSwitch,
   DenseTrackRow,
+  GenreDetailHero,
   MusicDetailHero,
+  PlaylistSelectionActionRow,
   PlaylistDetailHero
 } from './LibraryVisualComponents';
+import { PlaylistSortKey, PlaylistSortOrder } from '../playlist/PlaylistDetailSheets';
 
 enum TrackSortMode {
   DEFAULT = 'default',
@@ -53,12 +57,16 @@ struct ImageDetailTrackList {
   @Param showFavoriteAction: boolean = false;
   @Param useTrackNumber: boolean = false;
   @Param canRemoveFromPlaylist: boolean = false;
+  @Param usePlaylistEmptyState: boolean = false;
+  @Param selectionMode: boolean = false;
+  @Param selectedTrackGuids: string[] = [];
   @Event onPlayAll: () => void = (): void => {};
   @Event onPlayIndex: (index: number) => void = (_: number): void => {};
   @Event onFavorite: (track: MusicTrack, favorite: boolean) => void =
     (_: MusicTrack, __: boolean): void => {};
   @Event onTrackMore: (track: MusicTrack, canRemove: boolean) => void =
     (_: MusicTrack, __: boolean): void => {};
+  @Event onToggleSelection: (track: MusicTrack) => void = (_: MusicTrack): void => {};
   @Event onSort: () => void = (): void => {};
 
   build() {
@@ -93,15 +101,27 @@ struct ImageDetailTrackList {
       } else if (this.errorMessage.length > 0) {
         ListItem() {
           EmptyMusicState({
+            kind: MusicEmptyKind.LOAD_FAILED,
             title: '加载失败',
-            message: this.errorMessage,
-            symbol: $r('sys.symbol.exclamationmark_circle_fill')
+            message: this.errorMessage
           })
         }
         .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
       } else if (this.tracks.length === 0) {
         ListItem() {
-          EmptyMusicState({ title: '这里还没有歌曲', message: '添加歌曲后会显示在这里。' })
+          if (this.usePlaylistEmptyState) {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LIST,
+              title: '空空如也',
+              message: ''
+            })
+          } else {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LIST,
+              title: '这里还没有歌曲',
+              message: '添加歌曲后会显示在这里。'
+            })
+          }
         }
         .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
       } else {
@@ -118,11 +138,14 @@ struct ImageDetailTrackList {
                   showDuration: this.showDuration,
                   showFavoriteAction: this.showFavoriteAction,
                   useTrackNumber: this.useTrackNumber,
+                  selectionMode: this.selectionMode,
+                  selected: this.selectedTrackGuids.includes(repeatItem.item.guid),
                   onPlay: (index: number): void => this.onPlayIndex(index),
                   onFavorite: (track: MusicTrack, favorite: boolean): void =>
                     this.onFavorite(track, favorite),
                   onMore: (track: MusicTrack): void =>
-                    this.onTrackMore(track, this.canRemoveFromPlaylist)
+                    this.onTrackMore(track, this.canRemoveFromPlaylist),
+                  onToggleSelection: (track: MusicTrack): void => this.onToggleSelection(track)
                 })
                 Divider()
                   .strokeWidth(0.5)
@@ -161,6 +184,7 @@ struct ArtistAlbumList {
       if (this.albums.length === 0) {
         ListItem() {
           EmptyMusicState({
+            kind: MusicEmptyKind.LIST,
             title: '还没有可显示的专辑',
             message: '当前已加载的歌手歌曲中没有可识别的专辑。'
           })
@@ -211,6 +235,7 @@ export struct TrackListScreen {
   @Param album: MusicAlbum = new MusicAlbum();
   @Param artist: MusicArtist = new MusicArtist();
   @Param genre: MusicGenre = new MusicGenre();
+  @Param genreVisualIndex: number = 0;
   @Param playlist: MusicPlaylist = new MusicPlaylist();
   @Param symbol: Resource = $r('sys.symbol.music_note_list');
   @Param canRemoveFromPlaylist: boolean = false;
@@ -218,7 +243,12 @@ export struct TrackListScreen {
   @Param bottomInset: number = 0;
   @Param loading: boolean = false;
   @Param errorMessage: string = '';
+  @Param playlistSortKey: PlaylistSortKey = PlaylistSortKey.ADDED_DATE;
+  @Param playlistSortOrder: PlaylistSortOrder = PlaylistSortOrder.DESCENDING;
+  @Param playlistSelectionMode: boolean = false;
+  @Param playlistOperationBusy: boolean = false;
   @Local sortMode: TrackSortMode = TrackSortMode.DEFAULT;
+  @Local selectedPlaylistTrackGuids: string[] = [];
   @Local detailScroller: Scroller = new Scroller();
   @Local detailTrackScroller: Scroller = new Scroller();
   @Local artistAlbumScroller: Scroller = new Scroller();
@@ -232,6 +262,11 @@ export struct TrackListScreen {
     (_: MusicTrack, __: boolean): void => {};
   @Event onTrackMore: (track: MusicTrack, canRemove: boolean) => void = (_: MusicTrack, __: boolean): void => {};
   @Event onPageMore: () => void = (): void => {};
+  @Event onRequestPlaylistSort: () => void = (): void => {};
+  @Event onPlaylistSelectionDone: () => void = (): void => {};
+  @Event onPlaySelected: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
+  @Event onAddSelectedQueue: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
+  @Event onRemoveSelected: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
   @Event onOpenAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   private artistSections(): MusicChipItem[] {
@@ -244,6 +279,7 @@ export struct TrackListScreen {
   @Monitor('collectionId')
   onCollectionChanged(): void {
     this.artistSectionState.selectedId = 'tracks';
+    this.selectedPlaylistTrackGuids = [];
     this.detailScrollOffset = 0;
     this.detailHeroHeight = 0;
     this.detailScroller.scrollTo({ xOffset: 0, yOffset: 0, animation: false });
@@ -251,9 +287,16 @@ export struct TrackListScreen {
     this.artistAlbumScroller.scrollToIndex(0, false, ScrollAlign.START);
   }
 
+  @Monitor('playlistSelectionMode')
+  onPlaylistSelectionModeChanged(): void {
+    if (!this.playlistSelectionMode) {
+      this.selectedPlaylistTrackGuids = [];
+    }
+  }
+
   private isImageDetailCollection(): boolean {
     return this.collectionId === CollectionKind.ARTIST || this.collectionId === CollectionKind.ALBUM ||
-      this.collectionId === CollectionKind.PLAYLIST;
+      this.collectionId === CollectionKind.GENRE || this.collectionId === CollectionKind.PLAYLIST;
   }
 
   private detailHeaderCollapsed(): boolean {
@@ -313,6 +356,13 @@ export struct TrackListScreen {
 
   private sortedTracks(): MusicTrack[] {
     const tracks = this.visibleTracks().slice();
+    if (this.collectionId === CollectionKind.PLAYLIST) {
+      if (this.playlistSortKey === PlaylistSortKey.TITLE) {
+        tracks.sort((left: MusicTrack, right: MusicTrack): number => left.title.localeCompare(right.title));
+        return this.playlistSortOrder === PlaylistSortOrder.ASCENDING ? tracks : tracks.reverse();
+      }
+      return this.playlistSortOrder === PlaylistSortOrder.ASCENDING ? tracks.reverse() : tracks;
+    }
     if (this.sortMode === TrackSortMode.DEFAULT) {
       return tracks;
     }
@@ -352,10 +402,47 @@ export struct TrackListScreen {
     }
   }
 
+  private requestSort(): void {
+    if (this.collectionId === CollectionKind.PLAYLIST) {
+      this.onRequestPlaylistSort();
+      return;
+    }
+    this.cycleSortMode();
+  }
+
+  private isPlaylistTrackSelected(track: MusicTrack): boolean {
+    return this.selectedPlaylistTrackGuids.includes(track.guid);
+  }
+
+  private togglePlaylistTrack(track: MusicTrack): void {
+    if (!this.playlistSelectionMode || this.playlistOperationBusy) {
+      return;
+    }
+    if (this.isPlaylistTrackSelected(track)) {
+      this.selectedPlaylistTrackGuids = this.selectedPlaylistTrackGuids.filter((guid: string): boolean =>
+        guid !== track.guid);
+    } else {
+      this.selectedPlaylistTrackGuids = this.selectedPlaylistTrackGuids.concat(track.guid);
+    }
+  }
+
+  private selectedPlaylistTracks(): MusicTrack[] {
+    return this.sortedTracks().filter((track: MusicTrack): boolean => this.isPlaylistTrackSelected(track));
+  }
+
+  private toggleAllPlaylistTracks(): void {
+    const tracks = this.sortedTracks();
+    if (tracks.length > 0 && this.selectedPlaylistTrackGuids.length === tracks.length) {
+      this.selectedPlaylistTrackGuids = [];
+      return;
+    }
+    this.selectedPlaylistTrackGuids = tracks.map((track: MusicTrack): string => track.guid);
+  }
+
   private headerTitle(): string {
     if (this.collectionId === CollectionKind.ALBUM) return this.title.length > 0 ? this.title : '专辑';
     if (this.collectionId === CollectionKind.ARTIST) return this.title.length > 0 ? this.title : '歌手';
-    if (this.collectionId === CollectionKind.GENRE) return '风格';
+    if (this.collectionId === CollectionKind.GENRE) return this.title.length > 0 ? this.title : '风格';
     if (this.collectionId === CollectionKind.FAVORITES) return '收藏';
     if (this.collectionId === CollectionKind.HISTORY) return '最近播放';
     if (this.collectionId === CollectionKind.LIBRARY) return '音乐库';
@@ -473,6 +560,11 @@ export struct TrackListScreen {
                   trackCount: this.visibleTotal(),
                   safeTop: this.safeTop
                 })
+              } else if (this.collectionId === CollectionKind.GENRE) {
+                GenreDetailHero({
+                  genre: this.genre,
+                  variantIndex: this.genreVisualIndex
+                })
               } else {
                 PlaylistDetailHero({
                   playlist: this.playlist,
@@ -525,7 +617,7 @@ export struct TrackListScreen {
                         const tracks = this.sortedTracks();
                         if (tracks.length > 0) this.onPlay(tracks, 0);
                       },
-                      onMore: (): void => this.cycleSortMode()
+                      onMore: (): void => this.requestSort()
                     })
                   }
                   .width('100%')
@@ -564,7 +656,7 @@ export struct TrackListScreen {
                         this.onFavorite(track, favorite),
                       onTrackMore: (track: MusicTrack, canRemove: boolean): void =>
                         this.onTrackMore(track, canRemove),
-                      onSort: (): void => this.cycleSortMode()
+                      onSort: (): void => this.requestSort()
                     })
                   }
                 }
@@ -572,17 +664,30 @@ export struct TrackListScreen {
                 .layoutWeight(1)
               } else {
                 Row() {
-                  CollectionActionRow({
-                    count: this.visibleTotal(),
-                    onPlayAll: (): void => {
-                      const tracks = this.sortedTracks();
-                      if (tracks.length > 0) this.onPlay(tracks, 0);
-                    },
-                    onMore: (): void => this.cycleSortMode()
-                  })
+                  if (this.collectionId === CollectionKind.PLAYLIST && this.playlistSelectionMode) {
+                    PlaylistSelectionActionRow({
+                      selectedCount: this.selectedPlaylistTrackGuids.length,
+                      totalCount: this.sortedTracks().length,
+                      busy: this.playlistOperationBusy,
+                      onToggleAll: (): void => this.toggleAllPlaylistTracks(),
+                      onPlaySelected: (): void => this.onPlaySelected(this.selectedPlaylistTracks()),
+                      onAddQueue: (): void => this.onAddSelectedQueue(this.selectedPlaylistTracks()),
+                      onRemove: (): void => this.onRemoveSelected(this.selectedPlaylistTracks()),
+                      onDone: (): void => this.onPlaylistSelectionDone()
+                    })
+                  } else {
+                    CollectionActionRow({
+                      count: this.visibleTotal(),
+                      onPlayAll: (): void => {
+                        const tracks = this.sortedTracks();
+                        if (tracks.length > 0) this.onPlay(tracks, 0);
+                      },
+                      onMore: (): void => this.requestSort()
+                    })
+                  }
                 }
                 .width('100%')
-                .height(FnMusicUI.collectionActionHeight)
+                .constraintSize({ minHeight: FnMusicUI.collectionActionHeight })
                 .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
                 .alignItems(VerticalAlign.Center)
 
@@ -602,13 +707,17 @@ export struct TrackListScreen {
                     showFavoriteAction: true,
                     useTrackNumber: this.collectionId === CollectionKind.ALBUM,
                     canRemoveFromPlaylist: this.canRemoveFromPlaylist,
+                    usePlaylistEmptyState: this.collectionId === CollectionKind.PLAYLIST,
+                    selectionMode: this.collectionId === CollectionKind.PLAYLIST && this.playlistSelectionMode,
+                    selectedTrackGuids: this.selectedPlaylistTrackGuids,
                     onPlayAll: (): void => {},
                     onPlayIndex: (index: number): void => this.onPlay(this.sortedTracks(), index),
                     onFavorite: (track: MusicTrack, favorite: boolean): void =>
                       this.onFavorite(track, favorite),
                     onTrackMore: (track: MusicTrack, canRemove: boolean): void =>
                       this.onTrackMore(track, canRemove),
-                    onSort: (): void => this.cycleSortMode()
+                    onToggleSelection: (track: MusicTrack): void => this.togglePlaylistTrack(track),
+                    onSort: (): void => this.requestSort()
                   })
                 }
                 .width('100%')
@@ -706,6 +815,7 @@ export struct TrackListScreen {
             ListItem() {
               if (this.artistAlbums.length === 0) {
                 EmptyMusicState({
+                  kind: MusicEmptyKind.LIST,
                   title: '还没有可显示的专辑',
                   message: '当前已加载的歌手歌曲中没有可识别的专辑。'
                 })
@@ -796,18 +906,20 @@ export struct TrackListScreen {
             } else if (this.errorMessage.length > 0) {
               ListItem() {
                 EmptyMusicState({
+                  kind: MusicEmptyKind.LOAD_FAILED,
                   title: '加载失败',
-                  message: this.errorMessage,
-                  symbol: $r('sys.symbol.exclamationmark_circle_fill')
+                  message: this.errorMessage
                 })
               }
               .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
             } else if (this.visibleTracks().length === 0) {
               ListItem() {
                 EmptyMusicState({
+                  kind: this.collectionId === CollectionKind.LIBRARY ?
+                    MusicEmptyKind.CONTENT : MusicEmptyKind.LIST,
                   title: this.collectionId === CollectionKind.LIBRARY ? '音乐库为空' : '这里还没有歌曲',
                   message: this.collectionId === CollectionKind.LIBRARY ?
-                    '服务器音乐库中的歌曲会显示在这里。' : '添加歌曲后会显示在这里。'
+                    '添加音乐，开启畅听' : '添加歌曲后会显示在这里。'
                 })
               }
               .padding({ left: FnMusicUI.secondaryPagePadding, right: FnMusicUI.secondaryPagePadding })
