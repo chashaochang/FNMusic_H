@@ -4,6 +4,25 @@
 
 本项目与飞牛官方无隶属或合作关系。项目基于现有公开接口及公开开源项目提供的信息开发，不包含对飞牛应用安装包的逆向代码，也不提供任何服务器账号、访问凭证或私有数据。
 
+## 应用截图
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/01-login.jpg" alt="登录页" width="180"><br><sub>登录页</sub></td>
+    <td align="center"><img src="docs/screenshots/02-home.jpg" alt="首页" width="180"><br><sub>首页</sub></td>
+    <td align="center"><img src="docs/screenshots/03-recently-played.jpg" alt="最近播放" width="180"><br><sub>最近播放</sub></td>
+    <td align="center"><img src="docs/screenshots/04-album-detail.jpg" alt="专辑详情" width="180"><br><sub>专辑详情</sub></td>
+    <td align="center"><img src="docs/screenshots/05-artist-detail.jpg" alt="歌手详情" width="180"><br><sub>歌手详情</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/06-genres.jpg" alt="风格列表" width="180"><br><sub>风格列表</sub></td>
+    <td align="center"><img src="docs/screenshots/07-genre-detail.jpg" alt="风格详情" width="180"><br><sub>风格详情</sub></td>
+    <td align="center"><img src="docs/screenshots/08-player.jpg" alt="播放器" width="180"><br><sub>播放器</sub></td>
+    <td align="center"><img src="docs/screenshots/09-lyrics.jpg" alt="歌词页" width="180"><br><sub>歌词页</sub></td>
+    <td align="center"><img src="docs/screenshots/10-system-media-control.jpg" alt="系统媒体控制" width="180"><br><sub>系统媒体控制</sub></td>
+  </tr>
+</table>
+
 ## 已实现功能
 
 - 支持 FN ID / FN Connect 登录、域名直连登录及自动重连
