@@ -6,6 +6,7 @@ import { AuthStore } from '../auth/AuthStore';
 import { MusicPreferenceStore } from '../common/MusicPreferenceStore';
 import { MusicTrack } from '../model/MusicModels';
 import { FeiniuMusicApi } from '../network/FeiniuMusicApi';
+import { AudioBackgroundTask } from './AudioBackgroundTask';
 import { AvSessionBridge } from './AvSessionBridge';
 import { LyricsController } from './LyricsController';
 import { PlaybackQueue } from './PlaybackQueue';
@@ -24,6 +25,7 @@ export class MusicPlaybackController {
   private static shared: MusicPlaybackController = new MusicPlaybackController();
   private readonly playbackState: PlayerPresentationState = connectPlayerPresentationState();
   private readonly lyricsController: LyricsController = new LyricsController();
+  private readonly backgroundTask: AudioBackgroundTask = new AudioBackgroundTask();
   private readonly session: AvSessionBridge = new AvSessionBridge();
   private context?: common.UIAbilityContext;
   private api?: FeiniuMusicApi;
@@ -48,6 +50,7 @@ export class MusicPlaybackController {
 
   initialize(context: common.UIAbilityContext): void {
     this.context = context;
+    this.backgroundTask.configure(context);
     PlaybackSessionStore.initialize(context);
     this.restorePlaybackSession();
     this.session.configure(context, {
@@ -100,6 +103,7 @@ export class MusicPlaybackController {
   release(): void {
     this.generation += 1;
     this.stopDemoTimer();
+    this.backgroundTask.stop();
     const player: media.AVPlayer | undefined = this.player;
     this.player = undefined;
     if (player !== undefined) {
@@ -161,6 +165,9 @@ export class MusicPlaybackController {
     this.playbackState.lyricStatus = MusicPreferenceStore.state().lyricsEnabled ?
       LyricLoadStatus.LOADING : LyricLoadStatus.IDLE;
     this.playbackState.lyricErrorMessage = '';
+    if (!this.playbackState.demoMode) {
+      this.backgroundTask.start();
+    }
     this.syncSession();
     this.loadLyrics(track, generation).catch((): void => {});
     if (this.isDemoTrack(track)) {
@@ -296,6 +303,7 @@ export class MusicPlaybackController {
 
   async stop(): Promise<void> {
     this.stopDemoTimer();
+    this.backgroundTask.stop();
     const player: media.AVPlayer | undefined = this.player;
     if (player !== undefined && this.canStop(player.state)) {
       await player.stop();
@@ -309,6 +317,7 @@ export class MusicPlaybackController {
   async close(): Promise<void> {
     this.generation += 1;
     this.stopDemoTimer();
+    this.backgroundTask.stop();
     await this.replacePlayer(undefined);
     PlaybackSessionStore.clear();
     this.playbackState.reset();
@@ -371,6 +380,7 @@ export class MusicPlaybackController {
       this.syncSession();
       return;
     }
+    this.backgroundTask.start();
     const player: media.AVPlayer | undefined = this.player;
     if (player === undefined) {
       await this.playAt(this.playbackState.currentIndex, this.playbackState.positionMs);
@@ -384,6 +394,7 @@ export class MusicPlaybackController {
   async pause(): Promise<void> {
     if (this.playbackState.demoMode) {
       this.stopDemoTimer();
+      this.backgroundTask.stop();
       this.playbackState.status = PlaybackStatus.PAUSED;
       this.syncSession();
       return;
@@ -439,9 +450,11 @@ export class MusicPlaybackController {
       } else if (state === 'initialized') {
         player.prepare().catch((error: BusinessError): void => this.failCurrent(player, generation, error.message));
       } else if (state === 'playing') {
+        this.backgroundTask.start();
         this.playbackState.status = PlaybackStatus.PLAYING;
         this.reportPlay();
       } else if (state === 'paused') {
+        this.backgroundTask.stop();
         this.playbackState.status = PlaybackStatus.PAUSED;
       } else if (state === 'completed') {
         this.playbackState.status = PlaybackStatus.COMPLETED;
@@ -451,6 +464,7 @@ export class MusicPlaybackController {
           }
         });
       } else if (state === 'stopped') {
+        this.backgroundTask.stop();
         this.playbackState.status = PlaybackStatus.PAUSED;
       } else if (state === 'error') {
         this.fail('系统播放器发生错误');
@@ -475,6 +489,7 @@ export class MusicPlaybackController {
         return;
       }
       if (type === media.BufferingInfoType.BUFFERING_START) {
+        this.backgroundTask.start();
         this.playbackState.status = PlaybackStatus.BUFFERING;
       } else if (type === media.BufferingInfoType.BUFFERING_END && player.state === 'playing') {
         this.playbackState.status = PlaybackStatus.PLAYING;
@@ -501,6 +516,7 @@ export class MusicPlaybackController {
     if (generation !== this.generation) {
       return;
     }
+    this.backgroundTask.stop();
     this.playbackState.demoMode = true;
     this.playbackState.status = PlaybackStatus.PLAYING;
     this.startDemoTimer(generation);
@@ -580,6 +596,7 @@ export class MusicPlaybackController {
     }
     if (!MusicPreferenceStore.state().autoContinueEnabled &&
       this.playbackState.repeatMode !== PlaybackRepeatMode.ONE) {
+      this.backgroundTask.stop();
       this.syncSession();
       return;
     }
@@ -597,6 +614,7 @@ export class MusicPlaybackController {
     if (index >= 0) {
       await this.playAt(index);
     } else {
+      this.backgroundTask.stop();
       this.syncSession();
     }
   }
@@ -641,6 +659,7 @@ export class MusicPlaybackController {
 
   private async advanceRoam(): Promise<void> {
     if (!this.playbackState.roamMode || this.roamTrackSource === undefined) {
+      this.backgroundTask.stop();
       this.syncSession();
       return;
     }
@@ -650,6 +669,7 @@ export class MusicPlaybackController {
       track.guid.length > 0 && track.guid !== currentGuid) ??
       tracks.find((track: MusicTrack): boolean => track.guid.length > 0);
     if (next === undefined) {
+      this.backgroundTask.stop();
       this.syncSession();
       return;
     }
@@ -746,6 +766,7 @@ export class MusicPlaybackController {
 
   private fail(message: string): void {
     this.stopDemoTimer();
+    this.backgroundTask.stop();
     this.playbackState.status = PlaybackStatus.ERROR;
     this.playbackState.errorMessage = message.length > 0 ? message : '播放失败';
     this.syncSession();

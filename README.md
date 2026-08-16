@@ -4,6 +4,10 @@
 
 本项目与飞牛官方无隶属或合作关系。项目基于现有公开接口及公开开源项目提供的信息开发，不包含对飞牛应用安装包的逆向代码，也不提供任何服务器账号、访问凭证或私有数据。
 
+## 下载
+
+各版本未签名 HAP 可在 [GitHub Releases](https://github.com/chashaochang/FNMusic_H/releases) 下载。未签名 HAP 不能直接安装到设备，需要先使用自己的 HarmonyOS 调试或发布证书完成签名。
+
 ## 应用截图
 
 <table>
@@ -30,7 +34,7 @@
 - 首页搜索、漫游、收藏、最近播放和最近添加
 - 专辑、歌手、风格及支持分页加载的音乐库
 - 最近添加专辑与歌曲展示，支持专辑一键播放
-- 原生 AVPlayer / AVSession 音乐播放、播放队列和歌词显示
+- 原生 AVPlayer / AVSession 音乐播放、音频连续任务、播放队列和歌词显示
 - 漫游模式随机续播，漫游状态不展示普通播放队列
 - 播放列表、当前歌曲及播放进度持久化
 - 悬浮播放条、全屏播放器及对应过渡动画
@@ -47,7 +51,22 @@
 - ArkTS / ArkUI
 - Stage 模型
 
-本项目使用 DevEco Studio 3 自带的 API 26 工具链。命令行构建示例：
+本项目使用 DevEco Studio 3 自带的 API 26 工具链。推荐使用仓库脚本构建未签名 HAP：
+
+```bash
+./scripts/build-unsigned-hap.sh
+```
+
+脚本会从 `AppScope/app.json5` 自动读取版本号，并将产物复制为：
+
+```text
+dist/FNMusic_H-<版本号>-unsigned.hap
+```
+
+已配置本机自动签名时，脚本使用 release 模式构建并仅导出 unsigned 产物；未配置签名时会兼容 API 26 Beta 工具链，自动回退为 debug 未签名构建。
+如需指定 DevEco Studio，可设置 `FNMUSIC_DEVECO_STUDIO_PATH`；脚本会始终使用同一安装目录内的 SDK，避免系统环境变量指向另一套 SDK。
+
+也可以直接使用 Hvigor 构建：
 
 ```bash
 env DEVECO_SDK_HOME='/Applications/DevEco-Studio 3.app/Contents/sdk' \

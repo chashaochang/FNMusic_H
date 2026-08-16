@@ -1,6 +1,6 @@
 # Verification
 
-Date: 2026-08-14
+Date: 2026-08-16
 
 ## Environment
 
@@ -19,21 +19,31 @@ Dependency installation completed with the DevEco-bundled Node and ohpm CLI. The
 
 The following stages completed successfully:
 
-- LocalUnit (36 passed, 0 failed)
+- LocalUnit (39 passed, 0 failed)
 - CompileResource
 - CompileArkTS
 - PackageHap
 - PackingCheck
+- SignHap（仅用于本机验证，发布产物仍为未签名包）
 
 Final build result: `BUILD SUCCESSFUL`.
 
 Artifact:
 
-- `entry/build/default/outputs/default/entry-default-unsigned.hap`
-- Size: 2771976 bytes
-- SHA-256: `913953f4d86948af48b961115bfdfc13d8b532e2ff2ab2bf428e3cf1865ab6a0`
+- `dist/FNMusic_H-1.0.1-unsigned.hap`
+- Version: `1.0.1` (`versionCode=1000001`, `buildVersion=2`)
+- SDK: target/compatible API 26 Beta2
+- Size: 2677398 bytes
+- SHA-256: `5a9bf2ff2a70ccdf9444225fd3a893708cb9161224260eb226f9b8da69808c81`
 
 The HAP archive passed `unzip -t` without compressed-data errors.
+
+## Background playback
+
+- Audio playback now starts a system `AUDIO_PLAYBACK` continuous task while preparing, buffering or playing.
+- Pausing, stopping, clearing the queue, signing out and playback errors stop the continuous task.
+- The API 26 emulator kept playback active in the background for about four minutes; AVSession remained `playing`.
+- Process logs contained `startBackgroundRunning succeeded`, and pausing produced `stopBackgroundRunning succeeded`.
 
 ## FNID login correction
 
@@ -49,9 +59,9 @@ LocalUnit covers the relay login cookie, candidate generation, NetworkKit error 
 
 ## Not yet verified
 
-- Installation and launch on an API 26 emulator or physical phone
+- Long-duration background playback on a physical phone
 - Real Feiniu server login and API behavior
-- Media streaming, Range/seek, AVSession and background playback
+- Media streaming and Range/seek compatibility across different libraries
 - HUKS v2-to-v3 credential migration with the current source build; the public
   build is intentionally unsigned and cannot replace the differently signed
   emulator installation

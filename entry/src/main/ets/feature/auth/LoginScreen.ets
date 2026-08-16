@@ -264,9 +264,7 @@ export struct LoginScreen {
   @Local fnId: string = '';
   @Local username: string = '';
   @Local password: string = '';
-  @Local accessCode: string = '';
   @Local showPassword: boolean = false;
-  @Local showAdvanced: boolean = false;
   @Local introComplete: boolean = false;
   @Event onLogin: (credentials: LoginCredentials) => void = (_: LoginCredentials): void => {};
   @Event onRetry: () => void = (): void => {};
@@ -301,7 +299,6 @@ export struct LoginScreen {
     value.fnId = this.fnId.trim();
     value.username = this.username.trim();
     value.password = this.password;
-    value.accessCode = this.accessCode;
     this.onLogin(value);
   }
 
@@ -356,24 +353,6 @@ export struct LoginScreen {
               },
               onTogglePassword: (): void => {
                 this.showPassword = !this.showPassword;
-              },
-              onSubmit: (): void => this.submit()
-            })
-
-            SecurityCodeSectionV2({
-              expanded: this.showAdvanced,
-              accessCode: this.accessCode,
-              sectionEnabled: !this.busy(),
-              onExpandedChanged: (expanded: boolean): void => {
-                this.getUIContext().animateTo({
-                  duration: FnMusicLoginMetrics.contentMotionDuration,
-                  curve: Curve.FastOutSlowIn
-                }, (): void => {
-                  this.showAdvanced = expanded;
-                });
-              },
-              onAccessCodeChanged: (value: string): void => {
-                this.accessCode = value;
               },
               onSubmit: (): void => this.submit()
             })
@@ -547,54 +526,6 @@ struct NativeLoginFieldV2 {
     }
     .width('100%')
     .height(FnMusicLoginMetrics.fieldHeight)
-  }
-}
-
-@ComponentV2
-struct SecurityCodeSectionV2 {
-  @Param expanded: boolean = false;
-  @Param accessCode: string = '';
-  @Param sectionEnabled: boolean = true;
-  @Event onExpandedChanged: (expanded: boolean) => void = (_: boolean): void => {};
-  @Event onAccessCodeChanged: (value: string) => void = (_: string): void => {};
-  @Event onSubmit: () => void = (): void => {};
-
-  build() {
-    Column({ space: 8 }) {
-      Row({ space: 7 }) {
-        Text(this.expanded ? '收起安全码' : '填写安全码')
-          .fontSize(FnMusicUI.supportingSize)
-          .fontColor(this.sectionEnabled ? $r('app.color.brand_red') : $r('app.color.login_disabled_text'))
-        SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize(15)
-          .fontColor([this.sectionEnabled ? $r('app.color.brand_red') : $r('app.color.login_disabled_text')])
-      }
-      .height(40)
-      .enabled(this.sectionEnabled)
-      .accessibilityText(this.expanded ? '收起服务器安全码' : '填写服务器安全码')
-      .onClick((): void => this.onExpandedChanged(!this.expanded))
-
-      if (this.expanded) {
-        NativeLoginFieldV2({
-          text: this.accessCode,
-          placeholder: '服务器安全码（可选）',
-          accessibilityLabel: '服务器安全码，可选',
-          password: true,
-          showVisibilityAction: false,
-          fieldEnabled: this.sectionEnabled,
-          onTextChanged: (value: string): void => this.onAccessCodeChanged(value),
-          onSubmit: (): void => this.onSubmit()
-        })
-        .transition(
-          TransitionEffect.OPACITY
-            .animation({ duration: FnMusicLoginMetrics.contentMotionDuration, curve: Curve.EaseOut })
-            .combine(TransitionEffect.translate({ y: 8 })
-              .animation({ duration: FnMusicLoginMetrics.contentMotionDuration, curve: Curve.FastOutSlowIn }))
-        )
-      }
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
   }
 }
 
