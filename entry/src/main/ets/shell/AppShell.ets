@@ -47,7 +47,7 @@ import {
   HOME_PLAYER_TRANSITION_ID,
   MiniPlayerBar,
   MusicPlayerScreen,
-  PlaybackQueueSheet,
+  PlaybackQueuePanel,
   PlayerHostPlacement
 } from '../playback/PlayerComponents';
 import { TrackInfoSheet } from '../playback/PlayerTrackOverlays';
@@ -85,7 +85,8 @@ export enum AppShellPage {
   ARTIST_DETAIL = 'artist_detail',
   GENRE_DETAIL = 'genre_detail',
   PLAYLIST_DETAIL = 'playlist_detail',
-  PLAYER = 'player'
+  PLAYER = 'player',
+  QUEUE = 'queue'
 }
 
 enum RootTab {
@@ -113,6 +114,7 @@ struct PlayerNavDestination {
   onOpenArtist: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
   onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist) => void =
     (_: MusicTrack, __: MusicPlaylist): void => {};
+  onQueue: () => void = (): void => {};
   onHidden: () => void = (): void => {};
   onBackPressed: () => boolean = (): boolean => false;
   onTransitionUnavailable: () => void = (): void => {};
@@ -131,7 +133,8 @@ struct PlayerNavDestination {
       onFavorite: (track: MusicTrack, favorite: boolean): void => this.onFavorite(track, favorite),
       onOpenAlbum: (track: MusicTrack): void => this.onOpenAlbum(track),
       onOpenArtist: (artist: MusicArtist): void => this.onOpenArtist(artist),
-      onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist): void => this.onAddPlaylist(track, playlist)
+      onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist): void => this.onAddPlaylist(track, playlist),
+      onQueue: (): void => this.onQueue()
     })
     .width('100%')
     .height('100%')
@@ -731,7 +734,7 @@ export struct AppShell {
   }
 
   private sheetVisible(): boolean {
-    return this.playerState.queueVisible || this.showSettings || this.showTrackActions ||
+    return this.page === AppShellPage.QUEUE || this.showSettings || this.showTrackActions ||
       this.showTrackInfo || this.showPlaylistActions || this.showPlaylistSort ||
       this.showPlaylistEditor || this.showPlaylistPicker;
   }
@@ -877,9 +880,20 @@ export struct AppShell {
   }
 
   private openPlayerQueue(): void {
-    if (!this.playerState.roamMode) {
-      this.playback.showQueue();
+    if (this.playerState.roamMode || this.page === AppShellPage.QUEUE || !this.hasPlayer()) {
+      return;
     }
+    this.playback.hideQueue();
+    this.page = AppShellPage.QUEUE;
+    this.pathStack.pushPath({ name: AppShellPage.QUEUE });
+  }
+
+  private closePlayerQueue(): void {
+    if (this.page !== AppShellPage.QUEUE) {
+      return;
+    }
+    this.pathStack.pop();
+    this.syncPageFromPathStack();
   }
 
   private openPlayerDestination(showQueueAfterTransition: boolean): void {
@@ -1705,6 +1719,7 @@ export struct AppShell {
             FnToast.show(error.message || '加入歌单失败');
           });
         },
+        onQueue: (): void => this.openPlayerQueue(),
         onHidden: (): void => {
           this.syncPageFromPathStack();
           this.finishPlayerMinimize();
@@ -1721,6 +1736,51 @@ export struct AppShell {
           this.navigationEnabled = true;
         }
       })
+    } else if (name === AppShellPage.QUEUE) {
+      HdsNavDestination() {
+        Stack({ alignContent: Alignment.Bottom }) {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor(Color.Transparent)
+            .onClick((): void => this.closePlayerQueue())
+
+          PlaybackQueuePanel({
+            state: this.playerState,
+            safeBottom: this.safeBottom,
+            onClose: (): void => this.closePlayerQueue(),
+            onSelect: (index: number): void => {
+              this.playback.playAt(index).catch((): void => {});
+            },
+            onRemove: (index: number): void => {
+              const closesQueue: boolean = this.playerState.queue.length <= 1;
+              this.playback.removeQueueItem(index).then((): void => {
+                if (closesQueue) {
+                  this.closePlayerQueue();
+                }
+              }).catch((): void => {});
+            },
+            onClear: (): void => {
+              this.playback.clearQueue().then((): void => this.closePlayerQueue()).catch((): void => {});
+            },
+            onRepeat: (): void => this.playback.cycleRepeatMode()
+          })
+          .width('100%')
+        }
+        .width('100%')
+        .height('100%')
+      }
+      .mode(NavDestinationMode.DIALOG)
+      .systemTransition(NavigationSystemTransitionType.SLIDE_BOTTOM)
+      .backgroundColor(Color.Transparent)
+      .titleMode(HdsNavDestinationTitleMode.MINI)
+      .hideTitleBar(true)
+      .hideToolBar(true)
+      .onBackPressed((): boolean => {
+        this.closePlayerQueue();
+        return true;
+      })
+      .onHidden((): void => this.syncPageFromPathStack())
     } else {
       HdsNavDestination() {
         if (name === AppShellPage.SEARCH) {
@@ -1889,6 +1949,9 @@ export struct AppShell {
     .enabled(this.navigationEnabled)
     .customNavContentTransition((from: NavContentInfo, to: NavContentInfo,
       operation: NavigationOperation): NavigationAnimatedTransition | undefined => {
+      if (from.name === AppShellPage.QUEUE || to.name === AppShellPage.QUEUE) {
+        return undefined;
+      }
       return ezCustomTransition.customNavContentTransition(from, to, operation, {
         onTransitionStart: (): void => {
           this.navigationEnabled = false;
@@ -1924,25 +1987,6 @@ export struct AppShell {
         })
         .alignSelf(ItemAlign.Center)
         .zIndex(this.page === AppShellPage.PLAYER ? -1 : 100)
-      }
-
-      if (this.playerState.queueVisible && this.page !== AppShellPage.PLAYER) {
-        PlaybackQueueSheet({
-          state: this.playerState,
-          safeBottom: this.safeBottom,
-          onClose: (): void => this.playback.hideQueue(),
-          onSelect: (index: number): void => {
-            this.playback.playAt(index).catch((): void => {});
-          },
-          onRemove: (index: number): void => {
-            this.playback.removeQueueItem(index).catch((): void => {});
-          },
-          onClear: (): void => {
-            this.playback.clearQueue().catch((): void => {});
-          },
-          onRepeat: (): void => this.playback.cycleRepeatMode()
-        })
-        .zIndex(300)
       }
 
       if (this.showSettings) {

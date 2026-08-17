@@ -53,9 +53,24 @@ const PLAYER_LYRIC_CONTENT_BOTTOM_PADDING: number = 420;
 const PLAYER_PAGE_SWIPE_DISTANCE: number = 180;
 const PLAYER_PAGE_SWITCH_THRESHOLD: number = 22;
 const PLAYER_IMMERSION_DELAY: number = 5000;
+const PLAYER_COVER_SIZE: number = 252;
+const PLAYER_LYRIC_COVER_SIZE: number = 52;
+const PLAYER_LYRIC_COVER_LEFT: number = 4;
+const PLAYER_LYRIC_COVER_TOP: number = 0;
+const PLAYER_DEFAULT_UPPER_WIDTH: number = 312;
+const PLAYER_DEFAULT_UPPER_HEIGHT: number = 360;
+const PLAYER_TRACK_META_HEIGHT: number = 48;
 const PLAYER_COVER_LIFT: number = 10;
 const PLAYER_INFO_LIFT: number = 20;
-const PLAYER_LYRIC_SETTINGS_OFFSET: number = 126;
+const PLAYER_PROGRESS_LIFT: number = 6;
+const PLAYER_CONTROL_DROP: number = 4;
+const PLAYER_PROGRESS_HEIGHT: number = 30;
+const PLAYER_PROGRESS_TRACK_HEIGHT: number = 3;
+const PLAYER_PROGRESS_FILL_HEIGHT: number = 4;
+const PLAYER_PROGRESS_THUMB_SIZE: number = 20;
+const PLAYER_PROGRESS_STEP_MS: number = 1000;
+const PLAYER_PROGRESS_SEEK_TOLERANCE_MS: number = PLAYER_PROGRESS_STEP_MS / 2;
+const PLAYER_PROGRESS_SEEK_TIMEOUT_MS: number = 1600;
 const PLAYER_LYRIC_RESTORE_HEIGHT: number = 80;
 const PLAYER_LYRIC_IMMERSIVE_BOTTOM_GUTTER: number = 8;
 const PLAYER_LYRIC_PREVIEW_TOP: number = 224;
@@ -204,7 +219,7 @@ export struct MiniPlayerBar {
 }
 
 @ComponentV2
-struct QueuePanel {
+export struct PlaybackQueuePanel {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
   @Param safeBottom: number = 0;
   @Local selectedTab: number = 0;
@@ -241,6 +256,17 @@ struct QueuePanel {
       return `${artist} - ${album}`;
     }
     return artist.length > 0 ? artist : album;
+  }
+
+  private panelHeight(): number {
+    const topPadding: number = 12;
+    const bottomPadding: number = Math.max(18, this.safeBottom + 12);
+    const fixedContentHeight: number = topPadding + 60 + 46 + 12 + 50 + bottomPadding;
+    if (this.selectedTab !== 0 || this.state.queue.length === 0) {
+      return fixedContentHeight + 96;
+    }
+    const visibleRows: number = Math.min(7, this.state.queue.length);
+    return fixedContentHeight + visibleRows * 58;
   }
 
   build() {
@@ -472,44 +498,13 @@ struct QueuePanel {
       }
     }
     .width('100%')
-    .height('76%')
+    .height(this.panelHeight())
+    .constraintSize({ minHeight: '33%', maxHeight: '76%' })
     .padding({ left: 20, right: 20, top: 12, bottom: Math.max(18, this.safeBottom + 12) })
     .borderRadius({ topLeft: 28, topRight: 28 })
     .clip(true)
     .backgroundColor(Color.Transparent)
     .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.FLOATING_NAVIGATION))
-  }
-}
-
-@ComponentV2
-export struct PlaybackQueueSheet {
-  @Param state: PlayerPresentationState = new PlayerPresentationState();
-  @Param safeBottom: number = 0;
-  @Event onClose: () => void = (): void => {};
-  @Event onSelect: (index: number) => void = (_: number): void => {};
-  @Event onRemove: (index: number) => void = (_: number): void => {};
-  @Event onClear: () => void = (): void => {};
-  @Event onRepeat: () => void = (): void => {};
-
-  build() {
-    Stack({ alignContent: Alignment.Bottom }) {
-      Column()
-        .width('100%')
-        .height('100%')
-        .backgroundColor($r('app.color.scrim'))
-        .onClick((): void => this.onClose())
-      QueuePanel({
-        state: this.state,
-        safeBottom: this.safeBottom,
-        onClose: (): void => this.onClose(),
-        onSelect: (index: number): void => this.onSelect(index),
-        onRemove: (index: number): void => this.onRemove(index),
-        onClear: (): void => this.onClear(),
-        onRepeat: (): void => this.onRepeat()
-      })
-    }
-    .width('100%')
-    .height('100%')
   }
 }
 
@@ -642,15 +637,11 @@ struct PlayerLyricPage {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
   @Param track: MusicTrack = new MusicTrack();
   @Param visible: boolean = false;
+  @Param controlsVisible: boolean = true;
   @Event onSeek: (positionMs: number) => void = (_: number): void => {};
   @Event onRetry: () => void = (): void => {};
-  @Event onToggle: () => void = (): void => {};
-  @Event onNext: () => void = (): void => {};
-  @Event onPrevious: () => void = (): void => {};
-  @Event onRepeat: () => void = (): void => {};
-  @Event onQueue: () => void = (): void => {};
+  @Event onControlsVisibleChange: (visible: boolean) => void = (_: boolean): void => {};
   @Event onSettings: () => void = (): void => {};
-  @Local controlsVisible: boolean = true;
   @Local previewing: boolean = false;
   @Local previewIndex: number = -1;
   @Local contentOffset: number = 0;
@@ -676,7 +667,7 @@ struct PlayerLyricPage {
   @Monitor('visible')
   onVisibleChanged(): void {
     if (this.visible) {
-      this.controlsVisible = true;
+      this.onControlsVisibleChange(true);
       this.previewing = false;
       this.previewIndex = -1;
       this.scrollToActiveLine(true);
@@ -688,7 +679,7 @@ struct PlayerLyricPage {
 
   @Monitor('track.guid')
   onTrackChanged(): void {
-    this.controlsVisible = true;
+    this.onControlsVisibleChange(true);
     this.previewing = false;
     this.previewIndex = -1;
     this.restartImmersionTimer();
@@ -698,14 +689,9 @@ struct PlayerLyricPage {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column({ space: 12 }) {
         Row({ space: 12 }) {
-          MusicArtwork({
-            artworkSize: 52,
-            radius: 8,
-            placeholderMedia: $r('app.media.music_track_placeholder'),
-            placeholderRatio: 0.56,
-            coverId: this.track.coverId,
-            updatedAt: this.track.updatedAt
-          })
+          Blank()
+            .width(PLAYER_LYRIC_COVER_SIZE)
+            .height(PLAYER_LYRIC_COVER_SIZE)
           Column({ space: 3 }) {
             Text(this.track.title)
               .width('100%')
@@ -825,50 +811,7 @@ struct PlayerLyricPage {
           .onAreaChange((): void => this.scrollToActiveLine(false))
         }
 
-        Blank()
-          .height(this.controlsVisible ? 4 : PLAYER_LYRIC_IMMERSIVE_BOTTOM_GUTTER)
-
-        if (this.controlsVisible) {
-          Column({ space: 4 }) {
-            Slider({
-              value: this.state.positionMs,
-              min: 0,
-              max: Math.max(1, this.state.durationMs),
-              step: 1000,
-              style: SliderStyle.OutSet
-            })
-              .width('100%')
-              .height(28)
-              .blockSize({ width: 13, height: 13 })
-              .blockColor($r('app.color.accent'))
-              .trackColor($r('app.color.outline'))
-              .selectedColor($r('app.color.accent'))
-              .trackThickness(4)
-              .onChange((value: number, mode: SliderChangeMode): void => {
-                this.restartImmersionTimer();
-                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-                  this.onSeek(value);
-                }
-              })
-            Row() {
-              Text(formatDuration(this.state.positionMs)).fontSize(11).fontColor($r('app.color.text_secondary'))
-              Blank()
-              Text(formatDuration(this.state.durationMs)).fontSize(11).fontColor($r('app.color.text_secondary'))
-            }
-            .width('100%')
-          }
-          .width('100%')
-
-          PlayerControlRow({
-            state: this.state,
-            onRepeat: (): void => { this.restartImmersionTimer(); this.onRepeat(); },
-            onPrevious: (): void => { this.restartImmersionTimer(); this.onPrevious(); },
-            onToggle: (): void => { this.restartImmersionTimer(); this.onToggle(); },
-            onNext: (): void => { this.restartImmersionTimer(); this.onNext(); },
-            onQueue: (): void => { this.restartImmersionTimer(); this.onQueue(); }
-          })
-          .transition(TransitionEffect.OPACITY)
-        }
+        Blank().height(PLAYER_LYRIC_IMMERSIVE_BOTTOM_GUTTER)
       }
       .width('100%')
       .height('100%')
@@ -886,7 +829,7 @@ struct PlayerLyricPage {
           .backgroundColor($r('app.color.player_hit_target'))
           .accessibilityText('显示播放控制')
           .onClick((): void => {
-            this.controlsVisible = true;
+            this.onControlsVisibleChange(true);
             this.restartImmersionTimer();
           })
           Blank().width(44)
@@ -926,7 +869,6 @@ struct PlayerLyricPage {
         .width(FnMusicUI.tapTarget)
         .height(FnMusicUI.tapTarget)
         .zIndex(3)
-        .translate({ y: this.controlsVisible ? -PLAYER_LYRIC_SETTINGS_OFFSET : 0 })
         .accessibilityText('歌词设置')
         .onClick((): void => {
           if (this.controlsVisible) {
@@ -992,10 +934,10 @@ struct PlayerLyricPage {
     if (!this.visible) {
       return;
     }
-    this.controlsVisible = true;
+    this.onControlsVisibleChange(true);
     this.immersionTimer = setTimeout((): void => {
       if (this.visible) {
-        this.controlsVisible = false;
+        this.onControlsVisibleChange(false);
       }
     }, PLAYER_IMMERSION_DELAY);
   }
@@ -1018,6 +960,242 @@ struct PlayerLyricPage {
     });
   }
 
+}
+
+@ComponentV2
+struct ImmersiveProgressBar {
+  @Param value: number = 0;
+  @Param max: number = 1;
+  @Param trackColor: ResourceColor = $r('app.color.player_progress_track');
+  @Param startColor: ResourceColor = $r('app.color.player_progress_start');
+  @Param middleColor: ResourceColor = $r('app.color.player_progress_middle');
+  @Param endColor: ResourceColor = $r('app.color.player_progress_end');
+  @Param glowColor: ResourceColor = $r('app.color.player_progress_glow');
+  @Param thumbGlowColor: ResourceColor = $r('app.color.player_progress_thumb_glow');
+  @Event onPreview: (positionMs: number) => void = (_: number): void => {};
+  @Event onSeek: (positionMs: number) => void = (_: number): void => {};
+  @Local dragging: boolean = false;
+  @Local previewValue: number = 0;
+  @Local pendingSeekValue: number = -1;
+  @Local trackWidth: number = 0;
+  private pendingSeekTimer: number = -1;
+
+  aboutToDisappear(): void {
+    const previewActive: boolean = this.dragging || this.pendingSeekValue >= 0;
+    this.dragging = false;
+    this.clearPendingSeek(false);
+    if (previewActive) {
+      this.onPreview(-1);
+    }
+  }
+
+  @Monitor('value')
+  onExternalValueChanged(): void {
+    if (this.pendingSeekValue < 0 || this.dragging) {
+      return;
+    }
+    if (Math.abs(this.clamp(this.value) - this.pendingSeekValue) <= PLAYER_PROGRESS_SEEK_TOLERANCE_MS) {
+      this.clearPendingSeek(true);
+    }
+  }
+
+  private upperBound(): number {
+    return Math.max(1, this.max);
+  }
+
+  private clamp(value: number): number {
+    return Math.max(0, Math.min(this.upperBound(), value));
+  }
+
+  private quantize(value: number): number {
+    const stepped: number = Math.round(this.clamp(value) / PLAYER_PROGRESS_STEP_MS) * PLAYER_PROGRESS_STEP_MS;
+    return this.clamp(stepped);
+  }
+
+  private visualValue(): number {
+    if (this.dragging) {
+      return this.previewValue;
+    }
+    return this.pendingSeekValue >= 0 ? this.pendingSeekValue : this.clamp(this.value);
+  }
+
+  private progressRatio(): number {
+    return this.visualValue() / this.upperBound();
+  }
+
+  private fillWidth(): number {
+    return this.usableWidth() * this.progressRatio();
+  }
+
+  private thumbOffset(): number {
+    return this.usableWidth() * this.progressRatio();
+  }
+
+  private thumbRadius(): number {
+    return PLAYER_PROGRESS_THUMB_SIZE / 2;
+  }
+
+  private usableWidth(): number {
+    return Math.max(0, this.trackWidth - PLAYER_PROGRESS_THUMB_SIZE);
+  }
+
+  private valueForX(x: number): number {
+    const usableWidth: number = this.usableWidth();
+    if (usableWidth <= 0) {
+      return this.clamp(this.value);
+    }
+    const ratio: number = (x - this.thumbRadius()) / usableWidth;
+    return this.quantize(ratio * this.upperBound());
+  }
+
+  private touchX(event: TouchEvent): number | undefined {
+    if (event.touches.length > 0) {
+      return event.touches[0].x;
+    }
+    if (event.changedTouches.length > 0) {
+      return event.changedTouches[0].x;
+    }
+    return undefined;
+  }
+
+  private updatePreview(x: number): void {
+    this.previewValue = this.valueForX(x);
+    this.onPreview(this.previewValue);
+  }
+
+  private beginPendingSeek(target: number): void {
+    this.clearPendingSeek(false);
+    this.pendingSeekValue = target;
+    this.onPreview(target);
+    this.pendingSeekTimer = setTimeout((): void => {
+      this.clearPendingSeek(true);
+    }, PLAYER_PROGRESS_SEEK_TIMEOUT_MS);
+  }
+
+  private clearPendingSeek(notifyPreviewEnd: boolean): void {
+    if (this.pendingSeekTimer >= 0) {
+      clearTimeout(this.pendingSeekTimer);
+      this.pendingSeekTimer = -1;
+    }
+    if (this.pendingSeekValue >= 0) {
+      this.pendingSeekValue = -1;
+      if (notifyPreviewEnd) {
+        this.onPreview(-1);
+      }
+    }
+  }
+
+  private handleTouch(event: TouchEvent): void {
+    const x: number | undefined = this.touchX(event);
+    if (event.type === TouchType.Down) {
+      if (x === undefined) {
+        return;
+      }
+      this.clearPendingSeek(false);
+      this.dragging = true;
+      this.updatePreview(x);
+      event.stopPropagation();
+      return;
+    }
+    if (event.type === TouchType.Move && this.dragging) {
+      if (x !== undefined) {
+        this.updatePreview(x);
+      }
+      event.stopPropagation();
+      return;
+    }
+    if (event.type === TouchType.Up && this.dragging) {
+      if (x !== undefined) {
+        this.updatePreview(x);
+      }
+      const target: number = this.previewValue;
+      this.dragging = false;
+      this.beginPendingSeek(target);
+      this.onSeek(target);
+      event.stopPropagation();
+      return;
+    }
+    if (event.type === TouchType.Cancel && this.dragging) {
+      this.dragging = false;
+      this.onPreview(-1);
+      event.stopPropagation();
+    }
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.Start }) {
+      Row()
+        .width(this.usableWidth())
+        .height(PLAYER_PROGRESS_TRACK_HEIGHT)
+        .borderRadius(PLAYER_PROGRESS_TRACK_HEIGHT / 2)
+        .backgroundColor(this.trackColor)
+        .translate({ x: this.thumbRadius() })
+
+      if (this.fillWidth() > 0) {
+        Row()
+          .width(this.fillWidth())
+          .height(PLAYER_PROGRESS_FILL_HEIGHT)
+          .borderRadius(PLAYER_PROGRESS_FILL_HEIGHT / 2)
+          .linearGradient({
+            angle: 90,
+            colors: [
+              [this.startColor, 0],
+              [this.middleColor, 0.48],
+              [this.endColor, 1]
+            ]
+          })
+          .shadow({
+            radius: this.dragging ? 14 : 10,
+            color: this.glowColor,
+            offsetX: 0,
+            offsetY: 0
+          })
+          .translate({ x: this.thumbRadius() })
+      }
+
+      Stack({ alignContent: Alignment.Center }) {
+        Row()
+          .width(18)
+          .height(18)
+          .borderRadius(9)
+          .backgroundColor(this.thumbGlowColor)
+          .shadow({
+            radius: this.dragging ? 16 : 12,
+            color: this.glowColor,
+            offsetX: 0,
+            offsetY: 0
+          })
+        Row()
+          .width(8)
+          .height(8)
+          .borderRadius(4)
+          .backgroundColor($r('app.color.player_progress_thumb'))
+          .shadow({
+            radius: 5,
+            color: this.glowColor,
+            offsetX: 0,
+            offsetY: 0
+          })
+      }
+      .width(PLAYER_PROGRESS_THUMB_SIZE)
+      .height(PLAYER_PROGRESS_THUMB_SIZE)
+      .translate({ x: this.thumbOffset() })
+      .scale({ x: this.dragging ? 1.12 : 1, y: this.dragging ? 1.12 : 1 })
+      .animation({ duration: 140, curve: Curve.EaseOut })
+    }
+    .width('100%')
+    .height(PLAYER_PROGRESS_HEIGHT)
+    .responseRegion({ x: 0, y: -4, width: '100%', height: PLAYER_PROGRESS_HEIGHT + 8 })
+    .monopolizeEvents(true)
+    .accessibilityText('播放进度')
+    .onAreaChange((_: Area, area: Area): void => {
+      const width: number = area.width as number;
+      if (width > 0) {
+        this.trackWidth = width;
+      }
+    })
+    .onTouch((event: TouchEvent): void => this.handleTouch(event))
+  }
 }
 
 @ComponentV2
@@ -1048,6 +1226,10 @@ struct ExpandedPlayer {
   @Event onClearQueue: () => void = (): void => {};
   @Event onRetryLyrics: () => void = (): void => {};
   @Local contentDragOffsetX: number = 0;
+  @Local lyricControlsVisible: boolean = true;
+  @Local upperContentWidth: number = 0;
+  @Local upperContentHeight: number = 0;
+  @Local progressPreviewMs: number = -1;
 
   private track(): MusicTrack {
     return this.state.currentTrack() ?? new MusicTrack();
@@ -1068,6 +1250,10 @@ struct ExpandedPlayer {
       return '播放连接超时，请重试';
     }
     return '播放失败，请重试';
+  }
+
+  private progressPosition(): number {
+    return this.progressPreviewMs >= 0 ? this.progressPreviewMs : this.state.positionMs;
   }
 
   build() {
@@ -1123,51 +1309,24 @@ struct ExpandedPlayer {
         }
         .width('100%')
 
-        Stack({ alignContent: Alignment.Center }) {
-          MusicArtwork({
-            artworkSize: 252,
-            radius: 18,
-            placeholderMedia: $r('app.media.music_track_placeholder'),
-            placeholderRatio: 0.24,
-            coverId: this.track().coverId,
-            updatedAt: this.track().updatedAt
-          })
-            .opacity(1 - this.lyricPageProgress())
-            .scale({ x: this.coverScale(), y: this.coverScale() })
-            .translate({ x: this.coverTranslateX(), y: this.coverTranslateY() - PLAYER_COVER_LIFT })
-            .animation({ duration: this.contentDragOffsetX === 0 ? 220 : 0, curve: Curve.EaseOut })
-
+        Stack({ alignContent: Alignment.TopStart }) {
           PlayerLyricPage({
             state: this.state,
             track: this.track(),
             visible: this.panel === ExpandedPanel.LYRICS,
+            controlsVisible: this.lyricControlsVisible,
             onSeek: (positionMs: number): void => this.onSeek(positionMs),
             onRetry: (): void => this.onRetryLyrics(),
-            onToggle: (): void => this.onToggle(),
-            onNext: (): void => this.onNext(),
-            onPrevious: (): void => this.onPrevious(),
-            onRepeat: (): void => this.onRepeat(),
-            onQueue: (): void => this.onPanel(ExpandedPanel.QUEUE),
+            onControlsVisibleChange: (visible: boolean): void => {
+              this.lyricControlsVisible = visible;
+            },
             onSettings: (): void => this.onLyricsSettings()
           })
             .opacity(this.lyricPageProgress())
             .translate({ x: (1 - this.lyricPageProgress()) * 28, y: 0 })
             .animation({ duration: this.contentDragOffsetX === 0 ? 220 : 0, curve: Curve.EaseOut })
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .clip(true)
-        .gesture(
-          PanGesture({ direction: PanDirection.Horizontal, distance: 2 })
-            .onActionUpdate((event: GestureEvent): void => this.updateContentDrag(event.offsetX))
-            .onActionEnd((event: GestureEvent): void => this.finishContentSwipe(event.offsetX))
-            .onActionCancel((): void => { this.contentDragOffsetX = 0; })
-        )
 
-        if (this.panel !== ExpandedPanel.LYRICS) {
-          Column({ space: 8 }) {
-            Column({ space: 8 }) {
-              Row({ space: 8 }) {
+          Row({ space: 8 }) {
             Column({ space: 4 }) {
               Text(this.track().title)
                 .width('100%')
@@ -1209,8 +1368,63 @@ struct ExpandedPlayer {
             .onClick((): void => this.onToggleMenu())
           }
           .width('100%')
+          .height(PLAYER_TRACK_META_HEIGHT)
           .alignItems(VerticalAlign.Center)
+          .position({ x: 0, y: this.playerMetaY() })
+          .opacity(1 - this.lyricPageProgress())
+          .translate({ x: -this.lyricPageProgress() * 28, y: 0 })
+          .hitTestBehavior(this.panel === ExpandedPanel.PLAYER ? HitTestMode.Default : HitTestMode.None)
+          .zIndex(1)
+          .animation({ duration: this.contentDragOffsetX === 0 ? 220 : 0, curve: Curve.EaseOut })
 
+          Stack() {
+            MusicArtwork({
+              artworkSize: PLAYER_COVER_SIZE,
+              fill: true,
+              radius: 0,
+              placeholderMedia: $r('app.media.music_track_placeholder'),
+              placeholderRatio: 0.24,
+              coverId: this.track().coverId,
+              updatedAt: this.track().updatedAt
+            })
+          }
+            .width(PLAYER_COVER_SIZE)
+            .height(PLAYER_COVER_SIZE)
+            .borderRadius(this.coverSourceRadius())
+            .clip(true)
+            .scale({
+              x: this.coverScale(),
+              y: this.coverScale(),
+              centerX: '0%',
+              centerY: '0%'
+            })
+            .position({ x: this.coverX(), y: this.coverY() })
+            .zIndex(2)
+            .animation({ duration: this.contentDragOffsetX === 0 ? 220 : 0, curve: Curve.EaseOut })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .clip(true)
+        .onAreaChange((_: Area, area: Area): void => {
+          const width = area.width as number;
+          const height = area.height as number;
+          if (width > 0) {
+            this.upperContentWidth = width;
+          }
+          if (height > 0) {
+            this.upperContentHeight = height;
+          }
+        })
+        .gesture(
+          PanGesture({ direction: PanDirection.Horizontal, distance: 2 })
+            .onActionUpdate((event: GestureEvent): void => this.updateContentDrag(event.offsetX))
+            .onActionEnd((event: GestureEvent): void => this.finishContentSwipe(event.offsetX))
+            .onActionCancel((): void => { this.contentDragOffsetX = 0; })
+        )
+
+        if (this.panel !== ExpandedPanel.LYRICS || this.lyricControlsVisible) {
+          Column({ space: 8 }) {
+            Column({ space: 8 }) {
             if (this.state.status === PlaybackStatus.ERROR) {
             Row({ space: 10 }) {
               Text(this.playbackErrorText())
@@ -1230,28 +1444,29 @@ struct ExpandedPlayer {
             .width('100%')
             }
 
-            Column({ space: 4 }) {
-            Slider({
+            Column({ space: 2 }) {
+            ImmersiveProgressBar({
               value: this.state.positionMs,
-              min: 0,
               max: Math.max(1, this.state.durationMs),
-              step: 1000,
-              style: SliderStyle.OutSet
+              trackColor: this.palette.progressTrackColor.length > 0 ?
+                this.palette.progressTrackColor : $r('app.color.player_progress_track'),
+              startColor: this.palette.progressStartColor.length > 0 ?
+                this.palette.progressStartColor : $r('app.color.player_progress_start'),
+              middleColor: this.palette.progressMiddleColor.length > 0 ?
+                this.palette.progressMiddleColor : $r('app.color.player_progress_middle'),
+              endColor: this.palette.progressEndColor.length > 0 ?
+                this.palette.progressEndColor : $r('app.color.player_progress_end'),
+              glowColor: this.palette.progressGlowColor.length > 0 ?
+                this.palette.progressGlowColor : $r('app.color.player_progress_glow'),
+              thumbGlowColor: this.palette.progressThumbGlowColor.length > 0 ?
+                this.palette.progressThumbGlowColor : $r('app.color.player_progress_thumb_glow'),
+              onPreview: (positionMs: number): void => {
+                this.progressPreviewMs = positionMs;
+              },
+              onSeek: (positionMs: number): void => this.onSeek(positionMs)
             })
-              .width('100%')
-              .height(30)
-              .blockSize({ width: 14, height: 14 })
-              .blockColor($r('app.color.accent'))
-              .trackColor($r('app.color.outline'))
-              .selectedColor($r('app.color.accent'))
-              .trackThickness(4)
-              .onChange((value: number, mode: SliderChangeMode): void => {
-                if (mode === SliderChangeMode.End || mode === SliderChangeMode.Click) {
-                  this.onSeek(value);
-                }
-              })
             Row() {
-              Text(formatDuration(this.state.positionMs))
+              Text(formatDuration(this.progressPosition()))
                 .fontSize(11)
                 .fontColor($r('app.color.text_secondary'))
               Blank()
@@ -1273,10 +1488,9 @@ struct ExpandedPlayer {
             .width('100%')
             }
             .width('100%')
-
             }
             .width('100%')
-            .translate({ y: -PLAYER_INFO_LIFT })
+            .translate({ y: -PLAYER_PROGRESS_LIFT })
 
             PlayerControlRow({
               state: this.state,
@@ -1286,8 +1500,10 @@ struct ExpandedPlayer {
               onNext: (): void => this.onNext(),
               onQueue: (): void => this.onPanel(ExpandedPanel.QUEUE)
             })
+              .translate({ y: PLAYER_CONTROL_DROP })
           }
           .width('100%')
+          .transition(TransitionEffect.OPACITY)
         }
       }
       .width('100%')
@@ -1324,17 +1540,6 @@ struct ExpandedPlayer {
         .zIndex(20)
       }
 
-      if (this.panel === ExpandedPanel.QUEUE) {
-        PlaybackQueueSheet({
-          state: this.state,
-          safeBottom: this.safeBottom,
-          onClose: (): void => this.onPanel(ExpandedPanel.PLAYER),
-          onSelect: (index: number): void => this.onQueueSelect(index),
-          onRemove: (index: number): void => this.onQueueRemove(index),
-          onClear: (): void => this.onClearQueue(),
-          onRepeat: (): void => this.onRepeat()
-        })
-      }
     }
     .width('100%')
     .height('100%')
@@ -1368,15 +1573,30 @@ struct ExpandedPlayer {
   }
 
   private coverScale(): number {
-    return 1 - this.lyricPageProgress() * 0.66;
+    return 1 - (1 - PLAYER_LYRIC_COVER_SIZE / PLAYER_COVER_SIZE) * this.lyricPageProgress();
   }
 
-  private coverTranslateX(): number {
-    return -104 * this.lyricPageProgress();
+  private coverSourceRadius(): number {
+    const visualRadius = 18 - (18 - 8) * this.lyricPageProgress();
+    return visualRadius / Math.max(0.01, this.coverScale());
   }
 
-  private coverTranslateY(): number {
-    return -126 * this.lyricPageProgress();
+  private coverX(): number {
+    const width = this.upperContentWidth > 0 ? this.upperContentWidth : PLAYER_DEFAULT_UPPER_WIDTH;
+    const playerX = Math.max(0, (width - PLAYER_COVER_SIZE) / 2);
+    return playerX + (PLAYER_LYRIC_COVER_LEFT - playerX) * this.lyricPageProgress();
+  }
+
+  private coverY(): number {
+    const height = this.upperContentHeight > 0 ? this.upperContentHeight : PLAYER_DEFAULT_UPPER_HEIGHT;
+    const coverAreaHeight = Math.max(PLAYER_COVER_SIZE, height - PLAYER_TRACK_META_HEIGHT);
+    const playerY = Math.max(0, (coverAreaHeight - PLAYER_COVER_SIZE) / 2 - PLAYER_COVER_LIFT);
+    return playerY + (PLAYER_LYRIC_COVER_TOP - playerY) * this.lyricPageProgress();
+  }
+
+  private playerMetaY(): number {
+    const height = this.upperContentHeight > 0 ? this.upperContentHeight : PLAYER_DEFAULT_UPPER_HEIGHT;
+    return Math.max(0, height - PLAYER_TRACK_META_HEIGHT - PLAYER_INFO_LIFT);
   }
 }
 
@@ -1394,6 +1614,7 @@ export struct MusicPlayerScreen {
   @Event onOpenArtist: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
   @Event onAddPlaylist: (track: MusicTrack, playlist: MusicPlaylist) => void =
     (_: MusicTrack, __: MusicPlaylist): void => {};
+  @Event onQueue: () => void = (): void => {};
   @Local state: PlayerPresentationState = connectPlayerPresentationState();
   @Local preferences: MusicPreferenceState = connectMusicPreferenceState();
   @Local panel: ExpandedPanel = ExpandedPanel.PLAYER;
@@ -1408,13 +1629,7 @@ export struct MusicPlayerScreen {
   private controller: MusicPlaybackController = MusicPlaybackController.instance();
 
   aboutToAppear(): void {
-    this.syncQueuePanel();
     this.loadPalette();
-  }
-
-  @Monitor('state.queueVisible')
-  onQueueVisibilityChanged(): void {
-    this.syncQueuePanel();
   }
 
   @Monitor('state.currentIndex', 'state.queue')
@@ -1474,10 +1689,9 @@ export struct MusicPlayerScreen {
         onPanel: (panel: ExpandedPanel): void => {
           this.menuVisible = false;
           if (panel === ExpandedPanel.QUEUE) {
-            this.controller.showQueue();
+            this.onQueue();
             return;
           }
-          this.controller.hideQueue();
           this.panel = panel;
         },
         onRepeat: (): void => this.controller.cycleRepeatMode(),
@@ -1545,14 +1759,6 @@ export struct MusicPlayerScreen {
     }
     .width('100%')
     .height('100%')
-  }
-
-  private syncQueuePanel(): void {
-    if (this.state.queueVisible) {
-      this.panel = ExpandedPanel.QUEUE;
-    } else if (this.panel === ExpandedPanel.QUEUE) {
-      this.panel = ExpandedPanel.PLAYER;
-    }
   }
 
   private currentTrack(): MusicTrack {

@@ -373,6 +373,34 @@
       "value": "#1AFFFFFF"
     },
     {
+      "name": "player_progress_track",
+      "value": "#33FFFFFF"
+    },
+    {
+      "name": "player_progress_start",
+      "value": "#FFFFFFFF"
+    },
+    {
+      "name": "player_progress_middle",
+      "value": "#FFF2F2F4"
+    },
+    {
+      "name": "player_progress_end",
+      "value": "#FFD9DADD"
+    },
+    {
+      "name": "player_progress_glow",
+      "value": "#73FFFFFF"
+    },
+    {
+      "name": "player_progress_thumb_glow",
+      "value": "#38FFFFFF"
+    },
+    {
+      "name": "player_progress_thumb",
+      "value": "#FFFFFFFF"
+    },
+    {
       "name": "player_hit_target",
       "value": "#01000000"
     },
