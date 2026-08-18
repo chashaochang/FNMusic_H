@@ -10,6 +10,7 @@ import {
   formatDuration
 } from '../../model/MusicModels';
 import { MusicArtwork, MusicChipItem, VerticalMoreDots } from '../common/MusicUiComponents';
+import { LongTakeSource, transitionSourceId } from '../../navigation/LongTakeNavigation';
 
 function genreLabelMedia(variantIndex: number): Resource {
   const variant = Math.abs(variantIndex) % 4;
@@ -24,8 +25,14 @@ export struct AlbumGridItem {
   @Param album: MusicAlbum = new MusicAlbum();
   @Param itemWidth: number = FnMusicUI.albumGridItemSize;
   @Param showPlay: boolean = true;
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Param transitionScope: string = 'album_grid';
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'album', this.album.guid);
+  }
 
   build() {
     Column({ space: 7 }) {
@@ -38,6 +45,7 @@ export struct AlbumGridItem {
           coverId: this.album.coverId,
           updatedAt: this.album.createdAt
         })
+        .id(this.sourceId())
 
         Row() {
           Blank()
@@ -74,7 +82,10 @@ export struct AlbumGridItem {
       }
       .width(this.itemWidth)
       .height(this.itemWidth)
-      .onClick((): void => this.onOpen(this.album))
+      .onClick((): void => this.onOpen(
+        this.album,
+        new LongTakeSource(this.sourceId(), FnMusicUI.albumGridRadius)
+      ))
 
       Column({ space: 2 }) {
         Text(this.album.name)
@@ -91,7 +102,10 @@ export struct AlbumGridItem {
       }
       .width(this.itemWidth)
       .alignItems(HorizontalAlign.Start)
-      .onClick((): void => this.onOpen(this.album))
+      .onClick((): void => this.onOpen(
+        this.album,
+        new LongTakeSource(this.sourceId(), FnMusicUI.albumGridRadius)
+      ))
     }
     .width(this.itemWidth)
     .alignItems(HorizontalAlign.Start)
@@ -103,7 +117,9 @@ export struct AlbumGrid {
   @Param albums: MusicAlbum[] = [];
   @Param itemWidth: number = FnMusicUI.albumGridItemSize;
   @Param showPlay: boolean = true;
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Param transitionScope: string = 'album_grid';
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   private rowIndexes(): number[] {
@@ -124,7 +140,8 @@ export struct AlbumGrid {
               album: this.albums[repeatItem.item * 2],
               itemWidth: this.itemWidth,
               showPlay: this.showPlay,
-              onOpen: (album: MusicAlbum): void => this.onOpen(album),
+              transitionScope: this.transitionScope,
+              onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpen(album, source),
               onPlay: (album: MusicAlbum): void => this.onPlay(album)
             })
             Blank()
@@ -133,7 +150,8 @@ export struct AlbumGrid {
                 album: this.albums[repeatItem.item * 2 + 1],
                 itemWidth: this.itemWidth,
                 showPlay: this.showPlay,
-                onOpen: (album: MusicAlbum): void => this.onOpen(album),
+                transitionScope: this.transitionScope,
+                onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpen(album, source),
                 onPlay: (album: MusicAlbum): void => this.onPlay(album)
               })
             } else {
@@ -152,8 +170,14 @@ export struct AlbumGrid {
 export struct AlbumCatalogItem {
   @Param album: MusicAlbum = new MusicAlbum();
   @Param showPlay: boolean = true;
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Param transitionScope: string = 'album_catalog';
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'album', this.album.guid);
+  }
 
   private metadata(): string {
     const count = this.album.trackCount > 0 ? `${this.album.trackCount} 首` : '歌曲信息';
@@ -170,6 +194,7 @@ export struct AlbumCatalogItem {
         coverId: this.album.coverId,
         updatedAt: this.album.createdAt
       })
+      .id(this.sourceId())
 
       Column({ space: 4 }) {
         Text(this.album.name)
@@ -205,14 +230,20 @@ export struct AlbumCatalogItem {
     .height(FnMusicUI.collectionRowHeight)
     .padding({ left: 4, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .onClick((): void => this.onOpen(this.album))
+    .onClick((): void => this.onOpen(this.album, new LongTakeSource(this.sourceId(), 10)))
   }
 }
 
 @ComponentV2
 export struct ArtistCatalogItem {
   @Param artist: MusicArtist = new MusicArtist();
-  @Event onOpen: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  @Param transitionScope: string = 'artist_catalog';
+  @Event onOpen: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'artist', this.artist.guid);
+  }
 
   private metadata(): string {
     const tracks = this.artist.trackCount > 0 ? `${this.artist.trackCount} 首歌` : '歌曲信息';
@@ -229,6 +260,7 @@ export struct ArtistCatalogItem {
         showPlaceholderSymbol: false,
         coverId: this.artist.coverId
       })
+      .id(this.sourceId())
 
       Column({ space: 4 }) {
         Text(this.artist.name)
@@ -251,7 +283,10 @@ export struct ArtistCatalogItem {
     .height(FnMusicUI.collectionRowHeight)
     .padding({ left: 4, right: 4 })
     .alignItems(VerticalAlign.Center)
-    .onClick((): void => this.onOpen(this.artist))
+    .onClick((): void => this.onOpen(
+      this.artist,
+      new LongTakeSource(this.sourceId(), FnMusicUI.collectionArtistArtworkSize / 2)
+    ))
   }
 }
 
@@ -397,7 +432,13 @@ export struct GenreVinylArtwork {
 @ComponentV2
 export struct ArtistListItem {
   @Param artist: MusicArtist = new MusicArtist();
-  @Event onOpen: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  @Param transitionScope: string = 'artist_list';
+  @Event onOpen: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'artist', this.artist.guid);
+  }
 
   build() {
     Row({ space: FnMusicUI.contentGap }) {
@@ -408,6 +449,7 @@ export struct ArtistListItem {
         showPlaceholderSymbol: false,
         coverId: this.artist.coverId
       })
+      .id(this.sourceId())
       Column({ space: 3 }) {
         Text(this.artist.name)
           .fontSize(FnMusicUI.bodySize)
@@ -428,7 +470,7 @@ export struct ArtistListItem {
     .padding({ left: 8, right: 8 })
     .borderRadius(12)
     .hoverEffect(HoverEffect.Auto)
-    .onClick((): void => this.onOpen(this.artist))
+    .onClick((): void => this.onOpen(this.artist, new LongTakeSource(this.sourceId(), 24)))
   }
 }
 
@@ -437,7 +479,13 @@ export struct GenreGridItem {
   @Param genre: MusicGenre = new MusicGenre();
   @Param itemWidth: number = FnMusicUI.albumGridItemSize;
   @Param variantIndex: number = 0;
-  @Event onOpen: (genre: MusicGenre) => void = (_: MusicGenre): void => {};
+  @Param transitionScope: string = 'genre_grid';
+  @Event onOpen: (genre: MusicGenre, source: LongTakeSource) => void =
+    (_: MusicGenre, __: LongTakeSource): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'genre', this.genre.guid);
+  }
 
   build() {
     Stack({ alignContent: Alignment.TopStart }) {
@@ -466,7 +514,11 @@ export struct GenreGridItem {
     .borderRadius(FnMusicUI.albumGridRadius)
     .backgroundColor($r('app.color.genre_card_surface'))
     .clip(true)
-    .onClick((): void => this.onOpen(this.genre))
+    .id(this.sourceId())
+    .onClick((): void => this.onOpen(
+      this.genre,
+      new LongTakeSource(this.sourceId(), FnMusicUI.albumGridRadius)
+    ))
   }
 }
 
@@ -809,6 +861,7 @@ struct WebCollectionHeroArtwork {
 @ComponentV2
 export struct ArtistDetailHero {
   @Param artist: MusicArtist = new MusicArtist();
+  @Param transitionTargetId: string = '';
 
   build() {
     Stack({ alignContent: Alignment.Bottom }) {
@@ -820,6 +873,7 @@ export struct ArtistDetailHero {
         showPlaceholderSymbol: false,
         coverId: this.artist.coverId
       })
+        .id(this.transitionTargetId)
         .opacity(1)
 
       Column()
@@ -867,6 +921,7 @@ export struct ArtistDetailHero {
 export struct GenreDetailHero {
   @Param genre: MusicGenre = new MusicGenre();
   @Param variantIndex: number = 0;
+  @Param transitionTargetId: string = '';
 
   build() {
     Stack({ alignContent: Alignment.BottomStart }) {
@@ -958,6 +1013,7 @@ export struct GenreDetailHero {
     .width('100%')
     .height(FnMusicUI.artistHeroHeight)
     .clip(true)
+    .id(this.transitionTargetId)
   }
 }
 
@@ -966,6 +1022,7 @@ export struct AlbumDetailHero {
   @Param album: MusicAlbum = new MusicAlbum();
   @Param trackCount: number = 0;
   @Param safeTop: number = 0;
+  @Param transitionTargetId: string = '';
   @Local contentHeight: number = 0;
 
   private metadata(): string {
@@ -1049,6 +1106,7 @@ export struct AlbumDetailHero {
             coverId: this.album.coverId,
             updatedAt: this.album.createdAt
           })
+          .id(this.transitionTargetId)
           .translate({ x: -14 })
           .shadow({
             radius: 22,
@@ -1110,6 +1168,7 @@ export struct PlaylistDetailHero {
   @Param loadedCount: number = 0;
   @Param safeTop: number = 0;
   @Param shuffleLoading: boolean = false;
+  @Param transitionTargetId: string = '';
   @Local contentHeight: number = 0;
   @Event onShuffle: () => void = (): void => {};
   @Event onManage: () => void = (): void => {};
@@ -1158,6 +1217,7 @@ export struct PlaylistDetailHero {
             coverId: this.playlist.coverId,
             updatedAt: this.playlist.updatedAt
           })
+          .id(this.transitionTargetId)
           .shadow({
             radius: 20,
             color: $r('app.color.album_cover_shadow'),

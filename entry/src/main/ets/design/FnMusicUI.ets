@@ -11,10 +11,17 @@ export class FnMusicUI {
   static readonly homeRecentSectionGap: number = 36;
   static readonly homeTrackRowGap: number = 10;
   static readonly cardRadius: number = 16;
+  static readonly settingsCardRadius: number = 16;
   static readonly controlRadius: number = 8;
   static readonly chipHeight: number = 36;
   static readonly searchHeight: number = 48;
   static readonly listRowHeight: number = 56;
+  static readonly settingsRowHeight: number = 56;
+  static readonly settingsRowGap: number = 10;
+  static readonly settingsIconContainerSize: number = 20;
+  static readonly settingsIconSize: number = 20;
+  static readonly settingsDividerStart: number = 42;
+  static readonly settingsSheetDividerStart: number = 30;
   static readonly denseTrackRowHeight: number = 58;
   static readonly actionHeight: number = 48;
   static readonly bottomBarHeight: number = 60;
@@ -85,6 +92,7 @@ export class FnMusicUI {
   static readonly supportingSize: number = 13;
   static readonly titleSize: number = 24;
   static readonly tapTarget: number = 44;
+  static readonly profileAvatarSize: number = 52;
   // Feiniu Music Web empty-state illustrations are authored on a 150 x 150
   // canvas. Keep that source geometry for full-page states and use the
   // compact size only inside constrained mobile sheets.

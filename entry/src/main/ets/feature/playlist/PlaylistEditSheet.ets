@@ -462,10 +462,16 @@ export struct PlaylistEditSheet {
       .backgroundColor(Color.Transparent)
       .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.FLOATING_NAVIGATION))
       .onClick((): void => {})
-      .transition(TransitionEffect.scale({ x: 0.96, y: 0.96 }).combine(TransitionEffect.OPACITY))
+      .transition(
+        TransitionEffect.scale({ x: 0.96, y: 0.96 })
+          .combine(TransitionEffect.translate({ y: 12 }))
+          .combine(TransitionEffect.OPACITY)
+          .animation({ duration: 220, curve: Curve.FastOutSlowIn })
+      )
     }
     .width('100%')
     .height('100%')
     .zIndex(50)
+    .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
   }
 }

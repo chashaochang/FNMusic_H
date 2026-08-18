@@ -9,7 +9,8 @@ import {
   EmptyMusicState,
   MusicArtwork,
   MusicEmptyKind,
-  RoamPulseIcon
+  RoamPulseIcon,
+  VerticalMoreDots
 } from '../feature/common/MusicUiComponents';
 import { MusicPlaybackController } from './MusicPlaybackController';
 import { PlayerDynamicPalette, PlayerPaletteState } from './PlayerDynamicPalette';
@@ -218,13 +219,25 @@ export struct MiniPlayerBar {
   }
 }
 
+@ObservedV2
+export class PlaybackHistoryState {
+  @Trace tracks: MusicTrack[] = [];
+  @Trace total: number = 0;
+  @Trace loading: boolean = false;
+  @Trace errorMessage: string = '';
+}
+
 @ComponentV2
 export struct PlaybackQueuePanel {
   @Param state: PlayerPresentationState = new PlayerPresentationState();
+  @Param history: PlaybackHistoryState = new PlaybackHistoryState();
   @Param safeBottom: number = 0;
   @Local selectedTab: number = 0;
   @Event onClose: () => void = (): void => {};
   @Event onSelect: (index: number) => void = (_: number): void => {};
+  @Event onHistorySelect: (tracks: MusicTrack[], index: number) => void =
+    (_: MusicTrack[], __: number): void => {};
+  @Event onHistoryRetry: () => void = (): void => {};
   @Event onRemove: (index: number) => void = (_: number): void => {};
   @Event onClear: () => void = (): void => {};
   @Event onRepeat: () => void = (): void => {};
@@ -262,11 +275,16 @@ export struct PlaybackQueuePanel {
     const topPadding: number = 12;
     const bottomPadding: number = Math.max(18, this.safeBottom + 12);
     const fixedContentHeight: number = topPadding + 60 + 46 + 12 + 50 + bottomPadding;
-    if (this.selectedTab !== 0 || this.state.queue.length === 0) {
+    const itemCount: number = this.selectedTab === 0 ? this.state.queue.length : this.history.tracks.length;
+    if (itemCount === 0) {
       return fixedContentHeight + 96;
     }
-    const visibleRows: number = Math.min(7, this.state.queue.length);
+    const visibleRows: number = Math.min(7, itemCount);
     return fixedContentHeight + visibleRows * 58;
+  }
+
+  private historyCount(): number {
+    return Math.max(this.history.total, this.history.tracks.length);
   }
 
   build() {
@@ -322,7 +340,7 @@ export struct PlaybackQueuePanel {
 
         if (this.selectedTab === 1) {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
-            Text('历史列表 0')
+            Text(`历史列表 ${this.historyCount()}`)
               .fontSize(FnMusicUI.bodySize)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
@@ -335,7 +353,7 @@ export struct PlaybackQueuePanel {
           .onClick((): void => { this.selectedTab = 1; })
         } else {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
-            Text('历史列表 0')
+            Text(`历史列表 ${this.historyCount()}`)
               .fontSize(FnMusicUI.bodySize)
               .fontWeight(FontWeight.Regular)
               .fontColor($r('app.color.text_secondary'))
@@ -356,35 +374,49 @@ export struct PlaybackQueuePanel {
       Blank().height(12)
 
       Row() {
-        Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Row({ space: 8 }) {
-            SymbolGlyph(this.repeatSymbol())
+        if (this.selectedTab === 0) {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Row({ space: 8 }) {
+              SymbolGlyph(this.repeatSymbol())
+                .fontSize(20)
+                .fontColor([$r('app.color.text_primary')])
+              Text(this.repeatLabel())
+                .fontSize(FnMusicUI.bodySize)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.text_primary'))
+            }
+          }
+          .height(42)
+          .padding({ left: 0, right: 8 })
+          .backgroundColor(Color.Transparent)
+          .onClick((): void => this.onRepeat())
+
+          Blank()
+
+          Button({ type: ButtonType.Circle, stateEffect: true }) {
+            SymbolGlyph($r('sys.symbol.trash'))
               .fontSize(20)
-              .fontColor([$r('app.color.text_primary')])
-            Text(this.repeatLabel())
-              .fontSize(FnMusicUI.bodySize)
-              .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.text_primary'))
+              .fontColor([$r('app.color.text_secondary')])
+          }
+          .width(42)
+          .height(42)
+          .backgroundColor(Color.Transparent)
+          .enabled(this.state.queue.length > 0)
+          .accessibilityText('清空播放列表')
+          .onClick((): void => this.onClear())
+        } else {
+          Text('最近播放')
+            .fontSize(FnMusicUI.bodySize)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+          Blank()
+          if (this.history.loading && this.history.tracks.length > 0) {
+            LoadingProgress()
+              .width(22)
+              .height(22)
+              .color($r('app.color.accent'))
           }
         }
-        .height(42)
-        .padding({ left: 0, right: 8 })
-        .backgroundColor(Color.Transparent)
-        .onClick((): void => this.onRepeat())
-
-        Blank()
-
-        Button({ type: ButtonType.Circle, stateEffect: true }) {
-          SymbolGlyph($r('sys.symbol.trash'))
-            .fontSize(20)
-            .fontColor([$r('app.color.text_secondary')])
-        }
-        .width(42)
-        .height(42)
-        .backgroundColor(Color.Transparent)
-        .enabled(this.state.queue.length > 0)
-        .accessibilityText('清空播放列表')
-        .onClick((): void => this.onClear())
       }
       .width('100%')
       .height(50)
@@ -483,18 +515,107 @@ export struct PlaybackQueuePanel {
           .cachedCount(3)
         }
       } else {
-        Column() {
-          EmptyMusicState({
-            kind: MusicEmptyKind.LIST,
-            title: '暂无历史列表',
-            compact: true,
-            illustrationSize: FnMusicUI.emptyIllustrationSize
-          })
+        if (this.history.loading && this.history.tracks.length === 0) {
+          Column({ space: FnMusicUI.compactGap }) {
+            LoadingProgress()
+              .width(28)
+              .height(28)
+              .color($r('app.color.accent'))
+            Text('正在加载播放历史')
+              .fontSize(FnMusicUI.supportingSize)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+        } else if (this.history.errorMessage.length > 0 && this.history.tracks.length === 0) {
+          Column() {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LOAD_FAILED,
+              title: '历史列表加载失败',
+              message: this.history.errorMessage,
+              compact: true,
+              illustrationSize: FnMusicUI.emptyIllustrationSize,
+              actionTitle: '重新加载',
+              onAction: (): void => this.onHistoryRetry()
+            })
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+        } else if (this.history.tracks.length === 0) {
+          Column() {
+            EmptyMusicState({
+              kind: MusicEmptyKind.LIST,
+              title: '暂无历史列表',
+              compact: true,
+              illustrationSize: FnMusicUI.emptyIllustrationSize
+            })
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+        } else {
+          List({ space: 0 }) {
+            Repeat<MusicTrack>(this.history.tracks)
+              .each((repeatItem: RepeatItem<MusicTrack>): void => {
+                ListItem() {
+                  Column() {
+                    Row({ space: 10 }) {
+                      MusicArtwork({
+                        artworkSize: 40,
+                        radius: FnMusicUI.controlRadius,
+                        placeholderMedia: $r('app.media.music_track_placeholder'),
+                        placeholderRatio: 0.42,
+                        coverId: repeatItem.item.coverId,
+                        updatedAt: repeatItem.item.updatedAt
+                      })
+                      Column({ space: 3 }) {
+                        Text(repeatItem.item.title)
+                          .width('100%')
+                          .fontSize(FnMusicUI.bodySize)
+                          .fontWeight(FontWeight.Regular)
+                          .fontColor($r('app.color.text_primary'))
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        Text(this.trackSubtitle(repeatItem.item))
+                          .width('100%')
+                          .fontSize(FnMusicUI.supportingSize)
+                          .fontColor($r('app.color.text_secondary'))
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      }
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start)
+                      SymbolGlyph($r('sys.symbol.play_fill'))
+                        .width(28)
+                        .fontSize(17)
+                        .fontColor([$r('app.color.text_secondary')])
+                    }
+                    .width('100%')
+                    .height(58)
+                    .padding({ left: 2, right: 4 })
+                    .alignItems(VerticalAlign.Center)
+                    .onClick((): void => this.onHistorySelect(this.history.tracks.slice(), repeatItem.index))
+
+                    Divider()
+                      .strokeWidth(0.5)
+                      .color($r('app.color.divider'))
+                      .margin({ left: 50 })
+                  }
+                }
+              })
+              .key((item: MusicTrack): string => item.guid)
+              .virtualScroll()
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .scrollBar(BarState.Off)
+          .cachedCount(3)
         }
-        .layoutWeight(1)
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center)
       }
     }
     .width('100%')
@@ -1028,7 +1149,7 @@ struct ImmersiveProgressBar {
   }
 
   private thumbOffset(): number {
-    return this.usableWidth() * this.progressRatio();
+    return this.usableWidth() * this.progressRatio() - this.thumbRadius();
   }
 
   private thumbRadius(): number {
@@ -1036,7 +1157,7 @@ struct ImmersiveProgressBar {
   }
 
   private usableWidth(): number {
-    return Math.max(0, this.trackWidth - PLAYER_PROGRESS_THUMB_SIZE);
+    return Math.max(0, this.trackWidth);
   }
 
   private valueForX(x: number): number {
@@ -1044,7 +1165,7 @@ struct ImmersiveProgressBar {
     if (usableWidth <= 0) {
       return this.clamp(this.value);
     }
-    const ratio: number = (x - this.thumbRadius()) / usableWidth;
+    const ratio: number = x / usableWidth;
     return this.quantize(ratio * this.upperBound());
   }
 
@@ -1129,7 +1250,6 @@ struct ImmersiveProgressBar {
         .height(PLAYER_PROGRESS_TRACK_HEIGHT)
         .borderRadius(PLAYER_PROGRESS_TRACK_HEIGHT / 2)
         .backgroundColor(this.trackColor)
-        .translate({ x: this.thumbRadius() })
 
       if (this.fillWidth() > 0) {
         Row()
@@ -1150,7 +1270,6 @@ struct ImmersiveProgressBar {
             offsetX: 0,
             offsetY: 0
           })
-          .translate({ x: this.thumbRadius() })
       }
 
       Stack({ alignContent: Alignment.Center }) {
@@ -1357,9 +1476,7 @@ struct ExpandedPlayer {
             .onClick((): void => this.onFavorite())
 
             Button({ type: ButtonType.Circle, stateEffect: true }) {
-              SymbolGlyph($r('sys.symbol.more'))
-                .fontSize(22)
-                .fontColor([$r('app.color.text_primary')])
+              VerticalMoreDots({ color: $r('app.color.text_primary') })
             }
             .width(FnMusicUI.tapTarget)
             .height(FnMusicUI.tapTarget)
@@ -1516,28 +1633,38 @@ struct ExpandedPlayer {
       })
 
       if (this.menuVisible) {
-        Column()
+        Stack() {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor(Color.Transparent)
+            .onClick((): void => this.onToggleMenu())
+
+          Stack({ alignContent: Alignment.BottomEnd }) {
+            PlayerTrackMenu({
+              canOpenAlbum: this.track().albumGuid.length > 0 || this.track().albumName.length > 0,
+              canOpenArtist: this.track().artists.length > 0 || this.track().artistName.length > 0,
+              onOpenAlbum: (): void => this.onOpenAlbum(),
+              onOpenArtist: (): void => this.onOpenArtist(),
+              onAddPlaylist: (): void => this.onAddPlaylist(),
+              onInfo: (): void => this.onTrackInfo()
+            })
+              .transition(
+                TransitionEffect.translate({ y: 10 })
+                  .combine(TransitionEffect.scale({ x: 0.97, y: 0.97 }))
+                  .combine(TransitionEffect.OPACITY)
+                  .animation({ duration: 200, curve: Curve.FastOutSlowIn })
+              )
+          }
           .width('100%')
           .height('100%')
-          .backgroundColor(Color.Transparent)
-          .zIndex(19)
-          .onClick((): void => this.onToggleMenu())
-
-        Stack({ alignContent: Alignment.BottomEnd }) {
-          PlayerTrackMenu({
-            canOpenAlbum: this.track().albumGuid.length > 0 || this.track().albumName.length > 0,
-            canOpenArtist: this.track().artists.length > 0 || this.track().artistName.length > 0,
-            onOpenAlbum: (): void => this.onOpenAlbum(),
-            onOpenArtist: (): void => this.onOpenArtist(),
-            onAddPlaylist: (): void => this.onAddPlaylist(),
-            onInfo: (): void => this.onTrackInfo()
-          })
+          .padding({ right: 24, bottom: PLAYER_MENU_BOTTOM_OFFSET })
+          .hitTestBehavior(HitTestMode.Transparent)
         }
         .width('100%')
         .height('100%')
-        .padding({ right: 24, bottom: PLAYER_MENU_BOTTOM_OFFSET })
-        .hitTestBehavior(HitTestMode.Transparent)
         .zIndex(20)
+        .transition(TransitionEffect.OPACITY.animation({ duration: 160, curve: Curve.EaseOut }))
       }
 
     }

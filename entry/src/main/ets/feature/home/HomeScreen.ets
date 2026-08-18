@@ -24,6 +24,7 @@ import {
   DenseTrackRow,
   GenreGridItem
 } from '../library/LibraryVisualComponents';
+import { LongTakeSource, transitionSourceId } from '../../navigation/LongTakeNavigation';
 
 export interface HomeFeatureCardData {
   id: string;
@@ -429,14 +430,20 @@ struct HomeFeatureCard {
     .width(FnMusicUI.homeFeatureCardWidth)
     .height(FnMusicUI.homeFeatureCardHeight)
     .borderRadius(FnMusicUI.homeFeatureCardRadius)
+    .id(transitionSourceId('home_feature', 'card', this.data.id))
   }
 }
 
 @ComponentV2
 struct HomeRecentAlbumTile {
   @Param album: MusicAlbum = new MusicAlbum();
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId('home_recent', 'album', this.album.guid);
+  }
 
   build() {
     Column({ space: 6 }) {
@@ -448,6 +455,7 @@ struct HomeRecentAlbumTile {
           updatedAt: this.album.createdAt,
           placeholderMedia: $r('app.media.music_album_placeholder')
         })
+        .id(this.sourceId())
         Button({ type: ButtonType.Circle, stateEffect: true }) {
           Image($r('app.media.home_card_play'))
             .width(16)
@@ -482,14 +490,18 @@ struct HomeRecentAlbumTile {
     }
     .width(132)
     .alignItems(HorizontalAlign.Start)
-    .onClick((): void => this.onOpen(this.album))
+    .onClick((): void => this.onOpen(
+      this.album,
+      new LongTakeSource(this.sourceId(), FnMusicUI.controlRadius)
+    ))
   }
 }
 
 @ComponentV2
 struct HomeRecentAlbumPreview {
   @Param albums: MusicAlbum[] = [];
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   build() {
@@ -510,7 +522,7 @@ struct HomeRecentAlbumPreview {
               ListItem() {
                 HomeRecentAlbumTile({
                   album: repeatItem.item,
-                  onOpen: (album: MusicAlbum): void => this.onOpen(album),
+                  onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpen(album, source),
                   onPlay: (album: MusicAlbum): void => this.onPlay(album)
                 })
               }
@@ -591,13 +603,17 @@ export struct HomeScreen {
   @Event onSearchCollapsedChange: (collapsed: boolean) => void = (_: boolean): void => {};
   @Event onChromeProgress: (progress: number) => void = (_: number): void => {};
   @Event onOpenSearch: () => void = (): void => {};
-  @Event onOpenCollection: (id: string, title: string) => void = (_: string, __: string): void => {};
+  @Event onOpenCollection: (id: string, title: string, sourceId: string) => void =
+    (_: string, __: string, ___: string): void => {};
   @Event onPlayCollection: (id: string) => void = (_: string): void => {};
   @Event onOpenSection: (id: string) => void = (_: string): void => {};
-  @Event onOpenAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpenAlbum: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlayAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
-  @Event onOpenArtist: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
-  @Event onOpenGenre: (genre: MusicGenre) => void = (_: MusicGenre): void => {};
+  @Event onOpenArtist: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
+  @Event onOpenGenre: (genre: MusicGenre, source: LongTakeSource) => void =
+    (_: MusicGenre, __: LongTakeSource): void => {};
   @Event onPlayTracks: (tracks: MusicTrack[], index: number) => void = (_: MusicTrack[], __: number): void => {};
   @Event onTrackMore: (track: MusicTrack) => void = (_: MusicTrack): void => {};
 
@@ -848,7 +864,11 @@ export struct HomeScreen {
               }
               .onClick((): void => {
                 if (repeatItem.item.id !== 'roam') {
-                  this.onOpenCollection(repeatItem.item.id, repeatItem.item.title);
+                  this.onOpenCollection(
+                    repeatItem.item.id,
+                    repeatItem.item.title,
+                    transitionSourceId('home_feature', 'card', repeatItem.item.id)
+                  );
                 }
               })
             })
@@ -868,7 +888,7 @@ export struct HomeScreen {
           ListItem() {
             HomeRecentAlbumPreview({
               albums: this.recentAlbumItems(),
-              onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
+              onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpenAlbum(album, source),
               onPlay: (album: MusicAlbum): void => this.onPlayAlbum(album)
             })
           }
@@ -931,7 +951,8 @@ export struct HomeScreen {
                     AlbumCatalogItem({
                       album: repeatItem.item,
                       showPlay: true,
-                      onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album),
+                      transitionScope: 'home_album',
+                      onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpenAlbum(album, source),
                       onPlay: (album: MusicAlbum): void => this.onPlayAlbum(album)
                     })
                     Divider()
@@ -968,7 +989,8 @@ export struct HomeScreen {
                   Column() {
                     ArtistCatalogItem({
                       artist: repeatItem.item,
-                      onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
+                      transitionScope: 'home_artist',
+                      onOpen: (artist: MusicArtist, source: LongTakeSource): void => this.onOpenArtist(artist, source)
                     })
                     Divider()
                       .strokeWidth(0.5)
@@ -1006,14 +1028,16 @@ export struct HomeScreen {
                       genre: this.genreItems()[repeatItem.item * 2],
                       itemWidth: FnMusicUI.homeCatalogGridItemSize,
                       variantIndex: repeatItem.item * 2,
-                      onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
+                      transitionScope: 'home_genre',
+                      onOpen: (genre: MusicGenre, source: LongTakeSource): void => this.onOpenGenre(genre, source)
                     })
                     if (repeatItem.item * 2 + 1 < this.genreItems().length) {
                       GenreGridItem({
                         genre: this.genreItems()[repeatItem.item * 2 + 1],
                         itemWidth: FnMusicUI.homeCatalogGridItemSize,
                         variantIndex: repeatItem.item * 2 + 1,
-                        onOpen: (genre: MusicGenre): void => this.onOpenGenre(genre)
+                        transitionScope: 'home_genre',
+                        onOpen: (genre: MusicGenre, source: LongTakeSource): void => this.onOpenGenre(genre, source)
                       })
                     } else {
                       Blank().width(FnMusicUI.homeCatalogGridItemSize)

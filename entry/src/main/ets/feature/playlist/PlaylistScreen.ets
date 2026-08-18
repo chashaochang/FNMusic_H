@@ -8,13 +8,20 @@ import {
   SectionHeader,
   VerticalMoreDots
 } from '../common/MusicUiComponents';
+import { LongTakeSource, transitionSourceId } from '../../navigation/LongTakeNavigation';
 
 @ComponentV2
 struct PlaylistGridItem {
   @Param playlist: MusicPlaylist = new MusicPlaylist();
   @Param itemWidth: number = FnMusicUI.homeCatalogGridItemSize;
-  @Event onOpen: (playlist: MusicPlaylist) => void = (_: MusicPlaylist): void => {};
+  @Param transitionScope: string = 'playlist_grid';
+  @Event onOpen: (playlist: MusicPlaylist, source: LongTakeSource) => void =
+    (_: MusicPlaylist, __: LongTakeSource): void => {};
   @Event onMore: (playlist: MusicPlaylist) => void = (_: MusicPlaylist): void => {};
+
+  private sourceId(): string {
+    return transitionSourceId(this.transitionScope, 'playlist', this.playlist.guid);
+  }
 
   build() {
     Column({ space: 8 }) {
@@ -28,7 +35,11 @@ struct PlaylistGridItem {
           coverId: this.playlist.coverId,
           updatedAt: this.playlist.updatedAt
         })
-        .onClick((): void => this.onOpen(this.playlist))
+        .id(this.sourceId())
+        .onClick((): void => this.onOpen(
+          this.playlist,
+          new LongTakeSource(this.sourceId(), FnMusicUI.albumGridRadius)
+        ))
 
         Row({ space: 4 }) {
           SymbolGlyph($r('sys.symbol.music_note_list'))
@@ -67,7 +78,10 @@ struct PlaylistGridItem {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
-        .onClick((): void => this.onOpen(this.playlist))
+        .onClick((): void => this.onOpen(
+          this.playlist,
+          new LongTakeSource(this.sourceId(), FnMusicUI.albumGridRadius)
+        ))
 
         Button({ type: ButtonType.Circle, stateEffect: true }) {
           VerticalMoreDots()
@@ -137,7 +151,8 @@ export struct PlaylistScreen {
   @Param playlists: MusicPlaylist[] = [];
   @Param safeTop: number = 0;
   @Param bottomInset: number = 0;
-  @Event onOpenPlaylist: (playlist: MusicPlaylist) => void = (_: MusicPlaylist): void => {};
+  @Event onOpenPlaylist: (playlist: MusicPlaylist, source: LongTakeSource) => void =
+    (_: MusicPlaylist, __: LongTakeSource): void => {};
   @Event onPlaylistMore: (playlist: MusicPlaylist) => void = (_: MusicPlaylist): void => {};
 
   private rowIndexes(): number[] {
@@ -180,13 +195,17 @@ export struct PlaylistScreen {
               Row({ space: FnMusicUI.albumGridGap }) {
                 PlaylistGridItem({
                   playlist: this.playlists[repeatItem.item * 2],
-                  onOpen: (playlist: MusicPlaylist): void => this.onOpenPlaylist(playlist),
+                  transitionScope: 'playlist_tab',
+                  onOpen: (playlist: MusicPlaylist, source: LongTakeSource): void =>
+                    this.onOpenPlaylist(playlist, source),
                   onMore: (playlist: MusicPlaylist): void => this.onPlaylistMore(playlist)
                 })
                 if (repeatItem.item * 2 + 1 < this.playlists.length) {
                   PlaylistGridItem({
                     playlist: this.playlists[repeatItem.item * 2 + 1],
-                    onOpen: (playlist: MusicPlaylist): void => this.onOpenPlaylist(playlist),
+                    transitionScope: 'playlist_tab',
+                    onOpen: (playlist: MusicPlaylist, source: LongTakeSource): void =>
+                      this.onOpenPlaylist(playlist, source),
                     onMore: (playlist: MusicPlaylist): void => this.onPlaylistMore(playlist)
                   })
                 } else {

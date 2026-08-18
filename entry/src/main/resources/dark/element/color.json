@@ -309,6 +309,14 @@
       "value": "#BF2A2A2D"
     },
     {
+      "name": "profile_group_material_fallback",
+      "value": "#B33A3740"
+    },
+    {
+      "name": "profile_group_border",
+      "value": "#24FFFFFF"
+    },
+    {
       "name": "material_fallback_interactive",
       "value": "#662A2A2D"
     },
@@ -411,6 +419,10 @@
     {
       "name": "surface_elevated",
       "value": "#FA252528"
+    },
+    {
+      "name": "settings_sheet_surface",
+      "value": "#FF252528"
     },
     {
       "name": "mini_player_play_background",

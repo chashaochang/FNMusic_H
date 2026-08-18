@@ -133,11 +133,16 @@ export struct PlaylistSortSheet {
       .borderRadius({ topLeft: FnMusicUI.cardRadius + 8, topRight: FnMusicUI.cardRadius + 8 })
       .backgroundColor($r('app.color.surface_elevated'))
       .clip(true)
-      .transition(TransitionEffect.translate({ y: 72 }).combine(TransitionEffect.OPACITY))
+      .transition(
+        TransitionEffect.translate({ y: 72 })
+          .combine(TransitionEffect.OPACITY)
+          .animation({ duration: 240, curve: Curve.FastOutSlowIn })
+      )
     }
     .width('100%')
     .height('100%')
     .zIndex(50)
+    .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
   }
 }
 
@@ -231,10 +236,15 @@ export struct PlaylistActionsSheet {
       .borderRadius({ topLeft: FnMusicUI.cardRadius + 8, topRight: FnMusicUI.cardRadius + 8 })
       .backgroundColor($r('app.color.surface_elevated'))
       .clip(true)
-      .transition(TransitionEffect.translate({ y: 72 }).combine(TransitionEffect.OPACITY))
+      .transition(
+        TransitionEffect.translate({ y: 72 })
+          .combine(TransitionEffect.OPACITY)
+          .animation({ duration: 240, curve: Curve.FastOutSlowIn })
+      )
     }
     .width('100%')
     .height('100%')
     .zIndex(50)
+    .transition(TransitionEffect.OPACITY.animation({ duration: 180, curve: Curve.EaseOut }))
   }
 }

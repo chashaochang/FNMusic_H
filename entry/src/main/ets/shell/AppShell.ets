@@ -47,6 +47,7 @@ import {
   HOME_PLAYER_TRANSITION_ID,
   MiniPlayerBar,
   MusicPlayerScreen,
+  PlaybackHistoryState,
   PlaybackQueuePanel,
   PlayerHostPlacement
 } from '../playback/PlayerComponents';
@@ -58,6 +59,12 @@ import {
   LongTakeTransitionParam,
   LongTakeTransitionType
 } from '@hmanimations/ezcustomtransition';
+import {
+  detailHeroTransitionId,
+  LongTakeNavDestination,
+  LongTakeRouteParams,
+  LongTakeSource
+} from '../navigation/LongTakeNavigation';
 import {
   DividerMode,
   HdsNavDestination,
@@ -456,6 +463,7 @@ export struct AppShell {
   @Local playAllInProgress: boolean = false;
   @Local playAllShuffleInProgress: boolean = false;
   @Local playerState: PlayerPresentationState = connectPlayerPresentationState();
+  @Local playerHistory: PlaybackHistoryState = new PlaybackHistoryState();
   @Local preferences: MusicPreferenceState = connectMusicPreferenceState();
   @Local navigationEnabled: boolean = true;
   @Local homeChromeProgress: number = 0;
@@ -469,8 +477,10 @@ export struct AppShell {
   private playback: MusicPlaybackController = MusicPlaybackController.instance();
   private tabsController: HdsTabsController = new HdsTabsController();
   private homeScroller: Scroller = new Scroller();
+  private profileScroller: Scroller = new Scroller();
   private pathStack: NavPathStack = new NavPathStack();
   private playerTransitionInProgress: boolean = false;
+  private playerHistoryLoadSequence: number = 0;
   private pendingPlayerMinimizeAction?: () => void = undefined;
   private artistDetailSnapshot?: ArtistDetailSnapshot = undefined;
 
@@ -613,12 +623,12 @@ export struct AppShell {
             this.homeChromeProgress = progress;
           },
           onOpenSearch: (): void => this.openPage(AppShellPage.SEARCH),
-          onOpenCollection: (id: string, title: string): void => {
+          onOpenCollection: (id: string, title: string, sourceId: string): void => {
             if (id === CollectionKind.RECENTLY_ADDED) {
-              this.openCollection(CollectionKind.LIBRARY, '音乐库');
+              this.openCollection(CollectionKind.LIBRARY, '音乐库', sourceId);
               return;
             }
-            this.openCollection(id, title);
+            this.openCollection(id, title, sourceId);
           },
           onPlayCollection: (id: string): void => {
             this.playCollection(id);
@@ -628,12 +638,12 @@ export struct AppShell {
             else if (id === 'artists') this.openPage(AppShellPage.ARTISTS);
             else if (id === 'genres') this.openPage(AppShellPage.GENRES);
           },
-          onOpenAlbum: (album: MusicAlbum): void => this.openAlbum(album),
+          onOpenAlbum: (album: MusicAlbum, source: LongTakeSource): void => this.openAlbum(album, source),
           onPlayAlbum: (album: MusicAlbum): void => {
             this.playAlbum(album);
           },
-          onOpenArtist: (artist: MusicArtist): void => this.openArtist(artist),
-          onOpenGenre: (genre: MusicGenre): void => this.openGenre(genre),
+          onOpenArtist: (artist: MusicArtist, source: LongTakeSource): void => this.openArtist(artist, source),
+          onOpenGenre: (genre: MusicGenre, source: LongTakeSource): void => this.openGenre(genre, source),
           onPlayTracks: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
           onTrackMore: (track: MusicTrack): void => this.showTrackMenu(track)
         })
@@ -646,7 +656,8 @@ export struct AppShell {
           playlists: this.playlists(),
           safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
-          onOpenPlaylist: (playlist: MusicPlaylist): void => this.openPlaylist(playlist),
+          onOpenPlaylist: (playlist: MusicPlaylist, source: LongTakeSource): void =>
+            this.openPlaylist(playlist, source),
           onPlaylistMore: (playlist: MusicPlaylist): void => {
             this.activePlaylist = playlist;
             this.playlistEditMode = PlaylistEditMode.EDIT;
@@ -659,16 +670,10 @@ export struct AppShell {
       TabContent() {
         ProfileScreen({
           user: this.currentUser(), playlists: this.playlists(),
+          safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
-          onOpenPlaylist: (playlist: MusicPlaylist): void => this.openPlaylist(playlist),
-          onPlaylistMore: (playlist: MusicPlaylist): void => {
-            this.activePlaylist = playlist;
-            this.playlistEditMode = PlaylistEditMode.EDIT;
-            this.showPlaylistEditor = true;
-          },
-          onCreatePlaylist: (): void => {
-            this.beginCreatePlaylist();
-          },
+          pageScroller: this.profileScroller,
+          onOpenPlaylists: (): void => { this.rootTab = RootTab.PLAYLIST; },
           onOpenSettings: (): void => { this.showSettings = true; },
           onLogout: (): void => this.onLogout()
         })
@@ -860,7 +865,7 @@ export struct AppShell {
     return appSession.playlists;
   }
 
-  private openPage(page: AppShellPage): void {
+  private openPage(page: AppShellPage, param?: Object): void {
     if (page === AppShellPage.SEARCH || page === AppShellPage.ALBUMS || page === AppShellPage.ARTISTS ||
       page === AppShellPage.GENRES) {
       this.activeCollectionId = '';
@@ -872,7 +877,43 @@ export struct AppShell {
       this.previousPage = AppShellPage.ROOT;
     }
     this.page = page;
-    this.pathStack.pushPath({ name: page });
+    this.pathStack.pushPath({ name: page, param: param });
+  }
+
+  private createLongTakeRouteParams(sourceId: string, radius: number, type: LongTakeTransitionType,
+    alignTargetId: string = ''): LongTakeRouteParams | undefined {
+    if (!this.preferences.motionEnabled || sourceId.length === 0) {
+      return undefined;
+    }
+    const transitionParam = ezCustomTransition.generateLongTakeParam(
+      this.getUIContext(), sourceId, radius, {
+        type: type,
+        useSpringCurve: true,
+        isGestureEnabled: true
+      });
+    if (transitionParam === undefined) {
+      return undefined;
+    }
+    const routeParams = new LongTakeRouteParams();
+    routeParams.longTakeTransitionParam = transitionParam;
+    routeParams.alignTargetId = alignTargetId;
+    return routeParams;
+  }
+
+  private activeDetailTransitionTargetId(): string {
+    if (this.activeCollectionId === CollectionKind.ALBUM && this.activeAlbum.guid.length > 0) {
+      return detailHeroTransitionId('album', this.activeAlbum.guid);
+    }
+    if (this.activeCollectionId === CollectionKind.ARTIST && this.activeArtist.guid.length > 0) {
+      return detailHeroTransitionId('artist', this.activeArtist.guid);
+    }
+    if (this.activeCollectionId === CollectionKind.GENRE && this.activeGenre.guid.length > 0) {
+      return detailHeroTransitionId('genre', this.activeGenre.guid);
+    }
+    if (this.activeCollectionId === CollectionKind.PLAYLIST && this.activePlaylist.guid.length > 0) {
+      return detailHeroTransitionId('playlist', this.activePlaylist.guid);
+    }
+    return '';
   }
 
   private openPlayer(): void {
@@ -886,6 +927,28 @@ export struct AppShell {
     this.playback.hideQueue();
     this.page = AppShellPage.QUEUE;
     this.pathStack.pushPath({ name: AppShellPage.QUEUE });
+    this.loadPlayerHistory();
+  }
+
+  private loadPlayerHistory(): void {
+    const sequence: number = ++this.playerHistoryLoadSequence;
+    this.playerHistory.loading = true;
+    this.playerHistory.errorMessage = '';
+    AppRuntime.playHistoryPage(1, 100).then((result: PageResult<MusicTrack>): void => {
+      if (sequence !== this.playerHistoryLoadSequence) {
+        return;
+      }
+      this.playerHistory.tracks = result.list.slice();
+      this.playerHistory.total = Math.max(result.total, result.list.length);
+    }).catch((error: Error): void => {
+      if (sequence === this.playerHistoryLoadSequence) {
+        this.playerHistory.errorMessage = error.message || '暂时无法读取播放历史';
+      }
+    }).finally((): void => {
+      if (sequence === this.playerHistoryLoadSequence) {
+        this.playerHistory.loading = false;
+      }
+    });
   }
 
   private closePlayerQueue(): void {
@@ -1127,7 +1190,7 @@ export struct AppShell {
     this.loadActiveTrackPage(Math.max(1, this.activeTracksPage) + 1, false).catch((): void => {});
   }
 
-  private openCollection(id: string, title: string): void {
+  private openCollection(id: string, title: string, sourceId: string = ''): void {
     this.activeCollectionId = id;
     this.pageTitle = title;
     this.pageSubtitle = id === 'recently_added' ? '按添加时间从新到旧' : '';
@@ -1138,13 +1201,17 @@ export struct AppShell {
     this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length :
       (id === CollectionKind.LIBRARY ? this.runtime?.trackTotal ?? 0 : 0));
     this.activeTracksError = '';
-    this.openPage(AppShellPage.TRACKS);
+    this.openPage(AppShellPage.TRACKS, this.createLongTakeRouteParams(
+      sourceId,
+      FnMusicUI.homeFeatureCardRadius,
+      LongTakeTransitionType.CardLongTake
+    ));
     if (this.runtime !== undefined) {
       this.loadCollection(id).catch((): void => {});
     }
   }
 
-  private openAlbum(album: MusicAlbum): void {
+  private openAlbum(album: MusicAlbum, source: LongTakeSource = new LongTakeSource()): void {
     this.activeCollectionId = CollectionKind.ALBUM;
     this.activeAlbum = album;
     this.pageTitle = album.name;
@@ -1154,13 +1221,18 @@ export struct AppShell {
       track.albumGuid === album.guid || track.albumName === album.name) : [];
     this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : album.trackCount);
     this.activeTracksError = '';
-    this.openPage(AppShellPage.ALBUM_DETAIL);
+    this.openPage(AppShellPage.ALBUM_DETAIL, this.createLongTakeRouteParams(
+      source.componentId,
+      source.cornerRadius,
+      LongTakeTransitionType.ImageLongTake,
+      detailHeroTransitionId('album', album.guid)
+    ));
     if (this.runtime !== undefined) {
       this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
-  private openAlbumFromArtist(album: MusicAlbum): void {
+  private openAlbumFromArtist(album: MusicAlbum, source: LongTakeSource = new LongTakeSource()): void {
     const snapshot = new ArtistDetailSnapshot();
     snapshot.collectionId = this.activeCollectionId;
     snapshot.pageTitle = this.pageTitle;
@@ -1177,7 +1249,7 @@ export struct AppShell {
     snapshot.errorMessage = this.activeTracksError;
     snapshot.loadMoreError = this.activeTracksLoadMoreError;
     this.artistDetailSnapshot = snapshot;
-    this.openAlbum(album);
+    this.openAlbum(album, source);
   }
 
   private restoreArtistDetail(snapshot: ArtistDetailSnapshot): void {
@@ -1197,7 +1269,7 @@ export struct AppShell {
     this.activeTracksLoadMoreError = snapshot.loadMoreError;
   }
 
-  private openArtist(artist: MusicArtist): void {
+  private openArtist(artist: MusicArtist, source: LongTakeSource = new LongTakeSource()): void {
     this.activeCollectionId = CollectionKind.ARTIST;
     this.activeArtist = artist;
     this.pageTitle = artist.name;
@@ -1207,13 +1279,18 @@ export struct AppShell {
       track.artistGuid === artist.guid || track.artistName === artist.name) : [];
     this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : artist.trackCount);
     this.activeTracksError = '';
-    this.openPage(AppShellPage.ARTIST_DETAIL);
+    this.openPage(AppShellPage.ARTIST_DETAIL, this.createLongTakeRouteParams(
+      source.componentId,
+      source.cornerRadius,
+      LongTakeTransitionType.ImageLongTake,
+      detailHeroTransitionId('artist', artist.guid)
+    ));
     if (this.runtime !== undefined) {
       this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
-  private openGenre(genre: MusicGenre): void {
+  private openGenre(genre: MusicGenre, source: LongTakeSource = new LongTakeSource()): void {
     this.activeCollectionId = CollectionKind.GENRE;
     this.activeGenre = genre;
     const genreIndex = this.genres().findIndex((item: MusicGenre): boolean => item.guid === genre.guid);
@@ -1224,13 +1301,18 @@ export struct AppShell {
     this.activeTracks = this.runtime === undefined ? this.tracks() : [];
     this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : genre.trackCount);
     this.activeTracksError = '';
-    this.openPage(AppShellPage.GENRE_DETAIL);
+    this.openPage(AppShellPage.GENRE_DETAIL, this.createLongTakeRouteParams(
+      source.componentId,
+      source.cornerRadius,
+      LongTakeTransitionType.CardLongTake,
+      detailHeroTransitionId('genre', genre.guid)
+    ));
     if (this.runtime !== undefined) {
       this.loadActiveTrackPage(1, true).catch((): void => {});
     }
   }
 
-  private openPlaylist(playlist: MusicPlaylist): void {
+  private openPlaylist(playlist: MusicPlaylist, source: LongTakeSource = new LongTakeSource()): void {
     this.activeCollectionId = CollectionKind.PLAYLIST;
     this.activePlaylist = playlist;
     this.playlistSelectionMode = false;
@@ -1244,7 +1326,12 @@ export struct AppShell {
       this.tracks().slice(0, Math.min(this.tracks().length, Math.max(1, playlist.trackCount))) : [];
     this.resetActiveTrackPaging(this.runtime === undefined ? this.activeTracks.length : playlist.trackCount);
     this.activeTracksError = '';
-    this.openPage(AppShellPage.PLAYLIST_DETAIL);
+    this.openPage(AppShellPage.PLAYLIST_DETAIL, this.createLongTakeRouteParams(
+      source.componentId,
+      source.cornerRadius,
+      LongTakeTransitionType.ImageLongTake,
+      detailHeroTransitionId('playlist', playlist.guid)
+    ));
     if (this.runtime !== undefined) {
       this.loadActiveTrackPage(1, true).catch((): void => {});
     }
@@ -1747,11 +1834,17 @@ export struct AppShell {
 
           PlaybackQueuePanel({
             state: this.playerState,
+            history: this.playerHistory,
             safeBottom: this.safeBottom,
             onClose: (): void => this.closePlayerQueue(),
             onSelect: (index: number): void => {
               this.playback.playAt(index).catch((): void => {});
             },
+            onHistorySelect: (tracks: MusicTrack[], index: number): void => {
+              this.playTracks(tracks, index);
+              this.closePlayerQueue();
+            },
+            onHistoryRetry: (): void => this.loadPlayerHistory(),
             onRemove: (index: number): void => {
               const closesQueue: boolean = this.playerState.queue.length <= 1;
               this.playback.removeQueueItem(index).then((): void => {
@@ -1782,7 +1875,12 @@ export struct AppShell {
       })
       .onHidden((): void => this.syncPageFromPathStack())
     } else {
-      HdsNavDestination() {
+      LongTakeNavDestination({
+        pathStack: this.pathStack,
+        onHidden: (): void => {
+          this.syncPageFromPathStack();
+        }
+      }) {
         if (name === AppShellPage.SEARCH) {
         SearchScreen({
           tracks: this.runtime === undefined ? this.tracks() : this.searchTracks,
@@ -1798,8 +1896,8 @@ export struct AppShell {
           },
           onPlay: (tracks: MusicTrack[], index: number): void => this.playTracks(tracks, index),
           onTrackMore: (track: MusicTrack): void => this.showTrackMenu(track),
-          onOpenAlbum: (album: MusicAlbum): void => this.openAlbum(album),
-          onOpenArtist: (artist: MusicArtist): void => this.openArtist(artist)
+          onOpenAlbum: (album: MusicAlbum, source: LongTakeSource): void => this.openAlbum(album, source),
+          onOpenArtist: (artist: MusicArtist, source: LongTakeSource): void => this.openArtist(artist, source)
         })
       } else if (name === AppShellPage.ALBUMS) {
         AlbumCollectionScreen({
@@ -1807,7 +1905,7 @@ export struct AppShell {
           safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
           onBack: (): void => this.goBack(),
-          onOpen: (album: MusicAlbum): void => this.openAlbum(album),
+          onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.openAlbum(album, source),
           onPlay: (album: MusicAlbum): void => {
             this.playAlbum(album);
           }
@@ -1818,7 +1916,7 @@ export struct AppShell {
           safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
           onBack: (): void => this.goBack(),
-          onOpen: (artist: MusicArtist): void => this.openArtist(artist)
+          onOpen: (artist: MusicArtist, source: LongTakeSource): void => this.openArtist(artist, source)
         })
       } else if (name === AppShellPage.GENRES) {
         GenreCollectionScreen({
@@ -1826,7 +1924,7 @@ export struct AppShell {
           safeTop: this.safeTop,
           bottomInset: this.bottomAvoidance(),
           onBack: (): void => this.goBack(),
-          onOpen: (genre: MusicGenre): void => this.openGenre(genre)
+          onOpen: (genre: MusicGenre, source: LongTakeSource): void => this.openGenre(genre, source)
         })
       } else {
         TrackListScreen({
@@ -1840,6 +1938,7 @@ export struct AppShell {
           genre: this.activeGenre,
           genreVisualIndex: this.activeGenreVisualIndex,
           playlist: this.activePlaylist,
+          transitionTargetId: this.activeDetailTransitionTargetId(),
           symbol: this.pageSymbol,
           canRemoveFromPlaylist: name === AppShellPage.PLAYLIST_DETAIL,
           safeTop: this.safeTop,
@@ -1864,7 +1963,8 @@ export struct AppShell {
           onLoadMore: (): void => this.loadMoreActiveTracks(),
           onFavorite: (track: MusicTrack, favorite: boolean): void =>
             this.setTrackFavorite(track, favorite),
-          onOpenAlbum: (album: MusicAlbum): void => this.openAlbumFromArtist(album),
+          onOpenAlbum: (album: MusicAlbum, source: LongTakeSource): void =>
+            this.openAlbumFromArtist(album, source),
           onTrackMore: (track: MusicTrack, canRemove: boolean): void => this.showTrackMenu(track, canRemove),
           onRequestPlaylistSort: (): void => {
             this.showPlaylistSort = true;
@@ -1891,13 +1991,6 @@ export struct AppShell {
         })
         }
       }
-      .backgroundColor(Color.Transparent)
-      .titleMode(HdsNavDestinationTitleMode.MINI)
-      .hideTitleBar(true)
-      .hideToolBar(true)
-      .onHidden((): void => {
-        this.syncPageFromPathStack();
-      })
     }
   }
 
@@ -1944,7 +2037,7 @@ export struct AppShell {
     .hideTitleBar(this.page === AppShellPage.ROOT && this.rootTab === RootTab.HOME && this.homeSectionPinned)
     .hideToolBar(true)
     .hideBackButton(true)
-    .bindToScrollable([this.homeScroller])
+    .bindToScrollable([this.homeScroller, this.profileScroller])
     .navDestination(this.appDestination)
     .enabled(this.navigationEnabled)
     .customNavContentTransition((from: NavContentInfo, to: NavContentInfo,

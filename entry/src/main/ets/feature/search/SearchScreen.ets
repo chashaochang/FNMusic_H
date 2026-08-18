@@ -8,6 +8,7 @@ import {
   MusicChipStrip
 } from '../common/MusicUiComponents';
 import { AlbumGrid, ArtistListItem, DenseTrackRow } from '../library/LibraryVisualComponents';
+import { LongTakeSource } from '../../navigation/LongTakeNavigation';
 
 export interface SearchRequest {
   query: string;
@@ -88,7 +89,8 @@ struct SearchTrackResults {
 @ComponentV2
 struct SearchAlbumResults {
   @Param albums: MusicAlbum[] = [];
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
 
   build() {
     if (this.albums.length === 0) {
@@ -101,7 +103,8 @@ struct SearchAlbumResults {
       AlbumGrid({
         albums: this.albums,
         showPlay: false,
-        onOpen: (album: MusicAlbum): void => this.onOpen(album)
+        transitionScope: 'search_album',
+        onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpen(album, source)
       })
     }
   }
@@ -110,7 +113,8 @@ struct SearchAlbumResults {
 @ComponentV2
 struct SearchArtistResults {
   @Param artists: MusicArtist[] = [];
-  @Event onOpen: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  @Event onOpen: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
 
   build() {
     Column() {
@@ -124,7 +128,11 @@ struct SearchArtistResults {
         Repeat<MusicArtist>(this.artists)
           .each((repeatItem: RepeatItem<MusicArtist>): void => {
             Column() {
-              ArtistListItem({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+              ArtistListItem({
+                artist: repeatItem.item,
+                transitionScope: 'search_artist',
+                onOpen: (artist: MusicArtist, source: LongTakeSource): void => this.onOpen(artist, source)
+              })
               Divider()
                 .strokeWidth(0.5)
                 .color($r('app.color.divider'))
@@ -248,8 +256,10 @@ export struct SearchScreen {
   @Event onSearch: (request: SearchRequest) => void = (_: SearchRequest): void => {};
   @Event onPlay: (tracks: MusicTrack[], index: number) => void = (_: MusicTrack[], __: number): void => {};
   @Event onTrackMore: (track: MusicTrack) => void = (_: MusicTrack): void => {};
-  @Event onOpenAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
-  @Event onOpenArtist: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  @Event onOpenAlbum: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
+  @Event onOpenArtist: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
 
   private readonly kinds: MusicChipItem[] = [
     { id: 'tracks', title: '歌曲' },
@@ -399,12 +409,12 @@ export struct SearchScreen {
               } else if (this.sectionState.selectedId === 'albums') {
                 SearchAlbumResults({
                   albums: this.albums,
-                  onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album)
+                  onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpenAlbum(album, source)
                 })
               } else {
                 SearchArtistResults({
                   artists: this.artists,
-                  onOpen: (artist: MusicArtist): void => this.onOpenArtist(artist)
+                  onOpen: (artist: MusicArtist, source: LongTakeSource): void => this.onOpenArtist(artist, source)
                 })
               }
             }

@@ -790,16 +790,15 @@ export struct SettingsRow {
   @Event onSelect: () => void = (): void => {};
 
   build() {
-    Row({ space: FnMusicUI.contentGap }) {
+    Row({ space: FnMusicUI.settingsRowGap }) {
       Stack() {
         SymbolGlyph(this.symbol)
-          .fontSize(20)
-          .fontColor([this.destructive ? $r('app.color.danger') : $r('app.color.accent')])
+          .fontSize(FnMusicUI.settingsIconSize)
+          .fontColor([this.destructive ? $r('app.color.danger') : $r('sys.color.icon_secondary')])
       }
-      .width(36)
-      .height(36)
-      .borderRadius(FnMusicUI.controlRadius)
-      .backgroundColor(this.destructive ? $r('app.color.danger_soft') : $r('app.color.accent_soft'))
+      .width(FnMusicUI.settingsIconContainerSize)
+      .height(FnMusicUI.settingsIconContainerSize)
+      .backgroundColor(Color.Transparent)
 
       Column({ space: 2 }) {
         Text(this.title)
@@ -825,7 +824,7 @@ export struct SettingsRow {
     }
     .width('100%')
     .height(FnMusicUI.listRowHeight)
-    .padding({ left: 10, right: 10 })
+    .padding({ right: 4 })
     .onClick((): void => {
       this.onSelect();
     })

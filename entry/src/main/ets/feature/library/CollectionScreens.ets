@@ -4,6 +4,7 @@ import { AppRuntime, AppRuntimeState } from '../../common/AppRuntime';
 import { MusicAlbum, MusicArtist, MusicGenre } from '../../model/MusicModels';
 import { EmptyMusicState, MusicEmptyKind, SecondaryPageHeader } from '../common/MusicUiComponents';
 import { AlbumCatalogItem, ArtistCatalogItem, GenreGridItem } from './LibraryVisualComponents';
+import { LongTakeSource } from '../../navigation/LongTakeNavigation';
 
 @ComponentV2
 struct CatalogPagingFooter {
@@ -56,7 +57,8 @@ export struct AlbumCollectionScreen {
   @Param bottomInset: number = 0;
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
-  @Event onOpen: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpen: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
   @Event onPlay: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
 
   private hasRuntimeCatalog(): boolean {
@@ -92,7 +94,8 @@ export struct AlbumCollectionScreen {
                   AlbumCatalogItem({
                     album: repeatItem.item,
                     showPlay: true,
-                    onOpen: (album: MusicAlbum): void => this.onOpen(album),
+                    transitionScope: 'collection_album',
+                    onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpen(album, source),
                     onPlay: (album: MusicAlbum): void => this.onPlay(album)
                   })
                   Divider()
@@ -146,7 +149,8 @@ export struct ArtistCollectionScreen {
   @Param bottomInset: number = 0;
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
-  @Event onOpen: (artist: MusicArtist) => void = (_: MusicArtist): void => {};
+  @Event onOpen: (artist: MusicArtist, source: LongTakeSource) => void =
+    (_: MusicArtist, __: LongTakeSource): void => {};
 
   private hasRuntimeCatalog(): boolean {
     return this.runtimeState.phase === AuthPhase.AUTHENTICATED;
@@ -178,7 +182,11 @@ export struct ArtistCollectionScreen {
             .each((repeatItem: RepeatItem<MusicArtist>): void => {
               ListItem() {
                 Column() {
-                  ArtistCatalogItem({ artist: repeatItem.item, onOpen: (artist: MusicArtist): void => this.onOpen(artist) })
+                  ArtistCatalogItem({
+                    artist: repeatItem.item,
+                    transitionScope: 'collection_artist',
+                    onOpen: (artist: MusicArtist, source: LongTakeSource): void => this.onOpen(artist, source)
+                  })
                   Divider()
                     .strokeWidth(0.5)
                     .color($r('app.color.divider'))
@@ -230,7 +238,8 @@ export struct GenreCollectionScreen {
   @Param bottomInset: number = 0;
   @Local runtimeState: AppRuntimeState = AppRuntime.state();
   @Event onBack: () => void = (): void => {};
-  @Event onOpen: (genre: MusicGenre) => void = (_: MusicGenre): void => {};
+  @Event onOpen: (genre: MusicGenre, source: LongTakeSource) => void =
+    (_: MusicGenre, __: LongTakeSource): void => {};
 
   private hasRuntimeCatalog(): boolean {
     return this.runtimeState.phase === AuthPhase.AUTHENTICATED;
@@ -274,13 +283,15 @@ export struct GenreCollectionScreen {
                   GenreGridItem({
                     genre: this.genres[repeatItem.item * 2],
                     variantIndex: repeatItem.item * 2,
-                    onOpen: (genre: MusicGenre): void => this.onOpen(genre)
+                    transitionScope: 'collection_genre',
+                    onOpen: (genre: MusicGenre, source: LongTakeSource): void => this.onOpen(genre, source)
                   })
                   if (repeatItem.item * 2 + 1 < this.genres.length) {
                     GenreGridItem({
                       genre: this.genres[repeatItem.item * 2 + 1],
                       variantIndex: repeatItem.item * 2 + 1,
-                      onOpen: (genre: MusicGenre): void => this.onOpen(genre)
+                      transitionScope: 'collection_genre',
+                      onOpen: (genre: MusicGenre, source: LongTakeSource): void => this.onOpen(genre, source)
                     })
                   } else {
                     Blank().width(FnMusicUI.albumGridItemSize)

@@ -63,6 +63,7 @@ struct TrackActionRow {
 export struct TrackActionsSheet {
   @Param track: MusicTrack = new MusicTrack();
   @Param canRemoveFromPlaylist: boolean = false;
+  @Local presented: boolean = false;
   @Event onClose: () => void = (): void => {};
   @Event onPlay: () => void = (): void => {};
   @Event onPlayNext: () => void = (): void => {};
@@ -73,6 +74,33 @@ export struct TrackActionsSheet {
   @Event onOpenArtist: () => void = (): void => {};
   @Event onRemove: () => void = (): void => {};
   @Event onInfo: () => void = (): void => {};
+  private dismissing: boolean = false;
+
+  private present(): void {
+    if (this.presented || this.dismissing) {
+      return;
+    }
+    this.getUIContext().animateTo({
+      duration: 260,
+      curve: Curve.FastOutSlowIn
+    }, (): void => {
+      this.presented = true;
+    });
+  }
+
+  private dismissThen(action: () => void): void {
+    if (this.dismissing) {
+      return;
+    }
+    this.dismissing = true;
+    this.getUIContext().animateTo({
+      duration: 220,
+      curve: Curve.EaseIn,
+      onFinish: (): void => action()
+    }, (): void => {
+      this.presented = false;
+    });
+  }
 
   private actionListHeight(): number {
     const count = this.canRemoveFromPlaylist ? 9 : 8;
@@ -85,7 +113,8 @@ export struct TrackActionsSheet {
         .width('100%')
         .height('100%')
         .backgroundColor($r('app.color.scrim'))
-        .onClick((): void => this.onClose())
+        .opacity(this.presented ? 1 : 0)
+        .onClick((): void => this.dismissThen((): void => this.onClose()))
 
       Column() {
         Row({ space: FnMusicUI.contentGap }) {
@@ -106,7 +135,7 @@ export struct TrackActionsSheet {
           .backgroundColor($r('app.color.surface_secondary'))
           .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
           .accessibilityText('关闭歌曲操作')
-          .onClick((): void => this.onClose())
+          .onClick((): void => this.dismissThen((): void => this.onClose()))
         }
         .width('100%')
         .height(64)
@@ -118,52 +147,52 @@ export struct TrackActionsSheet {
             TrackActionRow({
               title: '播放',
               symbol: $r('sys.symbol.play_fill'),
-              onSelect: (): void => this.onPlay()
+              onSelect: (): void => this.dismissThen((): void => this.onPlay())
             })
             TrackActionRow({
               title: '下一首播放',
               symbol: $r('sys.symbol.forward_end_fill'),
-              onSelect: (): void => this.onPlayNext()
+              onSelect: (): void => this.dismissThen((): void => this.onPlayNext())
             })
             TrackActionRow({
               title: '加入播放队列',
               symbol: $r('sys.symbol.music_note_list'),
-              onSelect: (): void => this.onAddQueue()
+              onSelect: (): void => this.dismissThen((): void => this.onAddQueue())
             })
             TrackActionRow({
               title: this.track.isFavorite ? '取消收藏' : '收藏',
               symbol: this.track.isFavorite ? $r('sys.symbol.heart_fill') : $r('sys.symbol.heart'),
               highlighted: this.track.isFavorite,
-              onSelect: (): void => this.onFavorite()
+              onSelect: (): void => this.dismissThen((): void => this.onFavorite())
             })
             TrackActionRow({
               title: '添加到歌单',
               symbol: $r('sys.symbol.plus_circle'),
-              onSelect: (): void => this.onAddPlaylist()
+              onSelect: (): void => this.dismissThen((): void => this.onAddPlaylist())
             })
             TrackActionRow({
               title: this.track.albumName.length > 0 ? `查看专辑：${this.track.albumName}` : '查看专辑',
               symbol: $r('sys.symbol.music_note_list'),
-              onSelect: (): void => this.onOpenAlbum()
+              onSelect: (): void => this.dismissThen((): void => this.onOpenAlbum())
             })
             TrackActionRow({
               title: this.track.artistName.length > 0 ? `查看歌手：${this.track.artistName}` : '查看歌手',
               symbol: $r('sys.symbol.person'),
-              onSelect: (): void => this.onOpenArtist()
+              onSelect: (): void => this.dismissThen((): void => this.onOpenArtist())
             })
             if (this.canRemoveFromPlaylist) {
               TrackActionRow({
                 title: '从歌单移除',
                 symbol: $r('sys.symbol.trash'),
                 destructive: true,
-                onSelect: (): void => this.onRemove()
+                onSelect: (): void => this.dismissThen((): void => this.onRemove())
               })
             }
             TrackActionRow({
               title: '歌曲信息',
               symbol: $r('sys.symbol.info_circle'),
               showDivider: false,
-              onSelect: (): void => this.onInfo()
+              onSelect: (): void => this.dismissThen((): void => this.onInfo())
             })
           }
           .width('100%')
@@ -177,10 +206,12 @@ export struct TrackActionsSheet {
       .backgroundColor($r('app.color.surface_elevated'))
       .clip(true)
       .attributeModifier(FnMusicMaterials.modifier(FnMusicMaterialRole.ADAPTIVE_INTERACTIVE))
-      .transition(TransitionEffect.translate({ y: 72 }).combine(TransitionEffect.OPACITY))
+      .translate({ y: this.presented ? 0 : 88 })
+      .opacity(this.presented ? 1 : 0)
     }
     .width('100%')
     .height('100%')
     .zIndex(50)
+    .onAppear((): void => this.present())
   }
 }

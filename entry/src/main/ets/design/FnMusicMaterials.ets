@@ -4,6 +4,7 @@ import { deviceInfo } from '@kit.BasicServicesKit';
 export enum FnMusicMaterialRole {
   FLOATING_NAVIGATION = 'floating_navigation',
   FLOATING_PLAYER = 'floating_player',
+  CONTENT_GROUP = 'content_group',
   INTERACTIVE_SURFACE = 'interactive_surface',
   ADAPTIVE_INTERACTIVE = 'adaptive_interactive',
   CHIP = 'chip',
@@ -28,6 +29,7 @@ class FnMusicMaterialModifier<T extends CommonAttribute> implements AttributeMod
 export class FnMusicMaterials {
   private static floatingNavigation?: uiMaterial.Material;
   private static floatingPlayer?: uiMaterial.Material;
+  private static contentGroup?: uiMaterial.Material;
   private static interactiveSurface?: uiMaterial.Material;
   private static adaptiveInteractive?: uiMaterial.Material;
   private static chip?: uiMaterial.Material;
@@ -68,6 +70,9 @@ export class FnMusicMaterials {
     if (role === FnMusicMaterialRole.FLOATING_PLAYER) {
       return $r('app.color.material_fallback_floating_player');
     }
+    if (role === FnMusicMaterialRole.CONTENT_GROUP) {
+      return $r('app.color.profile_group_material_fallback');
+    }
     if (role === FnMusicMaterialRole.CHIP_SELECTED) {
       return $r('app.color.chip_selected_material');
     }
@@ -107,6 +112,18 @@ export class FnMusicMaterials {
         });
       }
       return FnMusicMaterials.floatingPlayer;
+    }
+    if (role === FnMusicMaterialRole.CONTENT_GROUP) {
+      if (FnMusicMaterials.contentGroup === undefined) {
+        FnMusicMaterials.contentGroup = new uiMaterial.ImmersiveMaterial({
+          style: uiMaterial.ImmersiveStyle.THIN,
+          materialColor: $r('sys.color.comp_background_primary'),
+          colorInvert: false,
+          applyShadow: false,
+          interactive: false
+        });
+      }
+      return FnMusicMaterials.contentGroup;
     }
     if (role === FnMusicMaterialRole.ADAPTIVE_INTERACTIVE) {
       if (FnMusicMaterials.adaptiveInteractive === undefined) {

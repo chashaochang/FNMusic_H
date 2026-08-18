@@ -29,6 +29,7 @@ import {
   PlaylistDetailHero
 } from './LibraryVisualComponents';
 import { PlaylistSortKey, PlaylistSortOrder } from '../playlist/PlaylistDetailSheets';
+import { LongTakeSource } from '../../navigation/LongTakeNavigation';
 
 export enum TrackSortMode {
   DEFAULT = 'default',
@@ -242,7 +243,8 @@ struct ArtistAlbumList {
   @Require @Param scroller: Scroller;
   @Param albums: MusicAlbum[] = [];
   @Param bottomInset: number = 0;
-  @Event onOpenAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpenAlbum: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
 
   build() {
     List({ space: 0, scroller: this.scroller }) {
@@ -263,7 +265,8 @@ struct ArtistAlbumList {
                 AlbumCatalogItem({
                   album: repeatItem.item,
                   showPlay: false,
-                  onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album)
+                  transitionScope: 'artist_detail_album',
+                  onOpen: (album: MusicAlbum, source: LongTakeSource): void => this.onOpenAlbum(album, source)
                 })
                 Divider()
                   .strokeWidth(0.5)
@@ -302,6 +305,7 @@ export struct TrackListScreen {
   @Param genre: MusicGenre = new MusicGenre();
   @Param genreVisualIndex: number = 0;
   @Param playlist: MusicPlaylist = new MusicPlaylist();
+  @Param transitionTargetId: string = '';
   @Param symbol: Resource = $r('sys.symbol.music_note_list');
   @Param canRemoveFromPlaylist: boolean = false;
   @Param safeTop: number = 0;
@@ -341,7 +345,8 @@ export struct TrackListScreen {
   @Event onPlaySelected: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
   @Event onAddSelectedQueue: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
   @Event onRemoveSelected: (tracks: MusicTrack[]) => void = (_: MusicTrack[]): void => {};
-  @Event onOpenAlbum: (album: MusicAlbum) => void = (_: MusicAlbum): void => {};
+  @Event onOpenAlbum: (album: MusicAlbum, source: LongTakeSource) => void =
+    (_: MusicAlbum, __: LongTakeSource): void => {};
 
   private artistSections(): MusicChipItem[] {
     return [
@@ -648,17 +653,19 @@ export struct TrackListScreen {
           Column() {
             Column() {
               if (this.collectionId === CollectionKind.ARTIST) {
-                ArtistDetailHero({ artist: this.artist })
+                ArtistDetailHero({ artist: this.artist, transitionTargetId: this.transitionTargetId })
               } else if (this.collectionId === CollectionKind.ALBUM) {
                 AlbumDetailHero({
                   album: this.album,
                   trackCount: this.visibleTotal(),
-                  safeTop: this.safeTop
+                  safeTop: this.safeTop,
+                  transitionTargetId: this.transitionTargetId
                 })
               } else if (this.collectionId === CollectionKind.GENRE) {
                 GenreDetailHero({
                   genre: this.genre,
-                  variantIndex: this.genreVisualIndex
+                  variantIndex: this.genreVisualIndex,
+                  transitionTargetId: this.transitionTargetId
                 })
               } else {
                 PlaylistDetailHero({
@@ -666,6 +673,7 @@ export struct TrackListScreen {
                   trackCount: this.visibleTotal(),
                   loadedCount: this.visibleTracks().length,
                   safeTop: this.safeTop,
+                  transitionTargetId: this.transitionTargetId,
                   shuffleLoading: this.playAllShuffleLoading,
                   onShuffle: (): void => this.onPlayAll(this.sortMode, true),
                   onManage: (): void => this.onPageMore()
@@ -723,7 +731,8 @@ export struct TrackListScreen {
                       scroller: this.artistAlbumScroller,
                       albums: this.artistAlbums,
                       bottomInset: this.bottomInset,
-                      onOpenAlbum: (album: MusicAlbum): void => this.onOpenAlbum(album)
+                      onOpenAlbum: (album: MusicAlbum, source: LongTakeSource): void =>
+                        this.onOpenAlbum(album, source)
                     })
                   } else {
                     ImageDetailTrackList({
@@ -932,7 +941,9 @@ export struct TrackListScreen {
                       AlbumCatalogItem({
                         album: repeatItem.item,
                         showPlay: false,
-                        onOpen: (album: MusicAlbum): void => this.onOpenAlbum(album)
+                        transitionScope: 'artist_detail_album_fallback',
+                        onOpen: (album: MusicAlbum, source: LongTakeSource): void =>
+                          this.onOpenAlbum(album, source)
                       })
                       Divider()
                         .strokeWidth(0.5)
